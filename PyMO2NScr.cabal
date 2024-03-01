@@ -20,6 +20,8 @@ executable PyMO2NScr
   other-modules:       IDAllocator
                      , CompilerMonad
                      , ToBuilder
+                     , NScrGen
+                     , Compiler
 
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5
