@@ -8,7 +8,7 @@ module IDAllocator
 import Data.HashMap.Strict as HM
 import GHC.IO (unsafePerformIO)
 import Data.Hashable (Hashable)
-import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef)
+import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
 
 
 newtype Hashable a => IDAllocator a =
@@ -23,7 +23,7 @@ newIDAllocator firstId =
 {-# NOINLINE getID #-}
 getID :: Hashable a => a -> IDAllocator a -> Int
 getID key (IDAllocator allocator) =
-  unsafePerformIO $ atomicModifyIORef allocator $ \(nextId, ids) ->
+  unsafePerformIO $ atomicModifyIORef' allocator $ \(nextId, ids) ->
     case HM.lookup key ids of
       Just id' -> ((nextId, ids), id')
       Nothing -> ((nextId + 1, HM.insert key nextId ids), nextId)
