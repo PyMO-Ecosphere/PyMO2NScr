@@ -30,6 +30,7 @@ executable PyMO2NScr
                      , file-embed
                      , PyMO-Parser
                      , hashable
+                     , filepath
 
   ghc-options:         -Wall
                        -Wcompat
