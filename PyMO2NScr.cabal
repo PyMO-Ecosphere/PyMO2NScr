@@ -18,6 +18,8 @@ executable PyMO2NScr
   hs-source-dirs:      src
   main-is:             Main.hs
   other-modules:       IDAllocator
+                     , CompilerMonad
+
   default-language:    Haskell2010
   build-depends:       base >= 4.7 && < 5
                      , text
