@@ -3,6 +3,7 @@ module IDAllocator
   , newIDAllocator
   , allIDs
   , getID
+  , allocatedIDCount
   ) where
 
 import Data.HashMap.Strict as HM
@@ -32,4 +33,8 @@ allIDs :: (MonadIO m, Hashable a) => IDAllocator a -> m [(a, Int)]
 allIDs (IDAllocator allocator) = liftIO $ do
   (_, ids) <- readIORef allocator
   return $ HM.toList ids
+
+
+allocatedIDCount :: (Hashable a) => IDAllocator a -> IO Int
+allocatedIDCount x = length <$> allIDs x
 

@@ -5,16 +5,15 @@ module Commands
   , commands) where
 
 import CompilerMonad
-import Data.Text (Text, pack ,unpack)
+import Data.Text (Text, unpack)
 import Data.Maybe (fromJust)
 import Language.PyMO.Script
 import Data.Text.Lazy.Builder (Builder)
 import IDAllocator (getID)
 import ToBuilder
-import Control.Monad.Trans.RWS (asks)
+import Control.Monad.RWS (asks)
 import NScrGen
 import Data.HashMap.Strict (HashMap, fromList)
-import Data.Bifunctor (first)
 
 
 pymoLabelToNScrLabel :: ScriptName -> Maybe Text -> CompilerM Builder
@@ -38,6 +37,6 @@ label _ = invalidArg
 
 
 commands :: HashMap Text Command
-commands = fromList $ first pack <$>
+commands = fromList
   [ ("label", label) ]
 

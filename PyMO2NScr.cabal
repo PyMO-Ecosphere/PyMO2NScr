@@ -31,7 +31,7 @@ executable PyMO2NScr
                      , encoding
                      , bytestring
                      , unordered-containers
-                     , transformers
+                     , mtl
                      , file-embed
                      , PyMO-Parser
                      , hashable

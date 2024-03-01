@@ -4,6 +4,7 @@ module CompilerMonad
   , CompilerEnv
     ( localVars
     , globalVars
+    , cgs
     , pymoLabels
     , effects
     , currentStmt )
@@ -12,21 +13,22 @@ module CompilerMonad
   , runCompiler
   , intercept
   , invalidArg
+  , printError
   ) where
 
 import IDAllocator
 import Data.Text
 import qualified Data.Text.Lazy as TL
 import Language.PyMO.Script
-import Control.Monad.Trans.RWS
+import Control.Monad.RWS
 import Data.Text.Lazy.Builder
-import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import Control.Monad.Trans.Class (MonadTrans(..))
+import Control.Monad.Except (ExceptT, runExceptT, MonadError (throwError))
 
 
 data CompilerEnv = CompilerEnv
   { localVars :: IDAllocator Text
   , globalVars :: IDAllocator Text
+  , cgs :: IDAllocator Text
   , pymoLabels :: IDAllocator (ScriptName, Maybe Text)
   , effects :: IDAllocator (Text, Int)
   , currentStmt :: Maybe Stmt }
@@ -45,11 +47,13 @@ runCompiler x = do
   defaultEnv <- do
     localVars' <- newIDAllocator 0
     globalVars' <- newIDAllocator 0
+    cgs' <- newIDAllocator 0
     pymoLabels' <- newIDAllocator 0
-    effects' <- newIDAllocator 0
+    effects' <- newIDAllocator 2
     return $ CompilerEnv
       { localVars = localVars'
       , globalVars = globalVars'
+      , cgs = cgs'
       , pymoLabels = pymoLabels'
       , effects = effects'
       , currentStmt = Nothing }
@@ -67,6 +71,24 @@ intercept (RWST f) = RWST $ \r s -> do
   return ((w', a'), s', mempty)
 
 
+printError :: String -> Compiler
+printError errStr = do
+  stmt <- asks currentStmt
+  liftIO $ putStrLn $
+    case stmt of
+      Just stmt' ->
+        let scriptName = stmtScriptName stmt'
+            lineNumber = stmtLineNumber stmt' in
+        scriptName ++ "(" ++ show lineNumber ++ "): " ++ errStr
+      Nothing ->
+        "(unknown): " ++ errStr
+
+
 invalidArg :: CompilerM a
-invalidArg = lift $ throwE "Invalid argument"
+invalidArg = do
+  stmt <- asks currentStmt
+  throwError $
+    case stmt of
+      Nothing -> "Invalid arguments."
+      Just stmt' -> "Call " ++ unpack (stmtCommand stmt') ++ " with invalid arguments."
 
