@@ -10,6 +10,8 @@ module CompilerMonad
   , CompilerState
     ( nscrLabels )
   , runCompiler
+  , intercept
+  , invalidArg
   ) where
 
 import IDAllocator
@@ -18,13 +20,14 @@ import qualified Data.Text.Lazy as TL
 import Language.PyMO.Script
 import Control.Monad.Trans.RWS
 import Data.Text.Lazy.Builder
-import Control.Monad.Trans.Except (ExceptT, runExceptT)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Control.Monad.Trans.Class (MonadTrans(..))
 
 
 data CompilerEnv = CompilerEnv
   { localVars :: IDAllocator Text
   , globalVars :: IDAllocator Text
-  , pymoLabels :: IDAllocator Text
+  , pymoLabels :: IDAllocator (ScriptName, Maybe Text)
   , effects :: IDAllocator (Text, Int)
   , currentStmt :: Maybe Stmt }
 
@@ -56,4 +59,14 @@ runCompiler x = do
 
   result <- runExceptT $ runRWST x defaultEnv defaultState
   return $ toLazyText $ either error (\((), _, b) -> b) result
+
+
+intercept :: (Monoid w, Monad m) => RWST r w s m a -> RWST r w s m (w, a)
+intercept (RWST f) = RWST $ \r s -> do
+  (a', s', w') <- f r s
+  return ((w', a'), s', mempty)
+
+
+invalidArg :: CompilerM a
+invalidArg = lift $ throwE "Invalid argument"
 
