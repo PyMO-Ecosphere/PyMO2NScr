@@ -5,9 +5,9 @@ module ToBuilder
   ( ToBuilder (toBuilder)
   ) where
 
-import Text.Builder
 import qualified Data.Text as TS
 import qualified Data.Text.Lazy as TL
+import Data.Text.Lazy.Builder
 
 
 class ToBuilder a where
@@ -19,29 +19,25 @@ instance ToBuilder Builder where
 
 
 instance ToBuilder String where
-  toBuilder = string
+  toBuilder = fromString
 
 
 instance ToBuilder TS.Text where
-  toBuilder = text
+  toBuilder = fromText
 
 
 instance ToBuilder TL.Text where
-  toBuilder = lazyText
+  toBuilder = fromLazyText
 
 
 instance ToBuilder Char where
-  toBuilder = char
+  toBuilder x = fromString [x]
 
 
 instance ToBuilder Double where
-  toBuilder = string . show
+  toBuilder = fromString . show
 
 
-instance ToBuilder Float where
-  toBuilder = string . show
-
-
-instance Integral a => ToBuilder a where
-  toBuilder = decimal
+instance ToBuilder Int where
+  toBuilder = fromString . show
 

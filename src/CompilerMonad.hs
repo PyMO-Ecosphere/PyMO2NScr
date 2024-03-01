@@ -14,9 +14,10 @@ module CompilerMonad
 
 import IDAllocator
 import Data.Text
+import qualified Data.Text.Lazy as TL
 import Language.PyMO.Script
 import Control.Monad.Trans.RWS
-import Text.Builder
+import Data.Text.Lazy.Builder
 import Control.Monad.Trans.Except (ExceptT, runExceptT)
 
 
@@ -36,7 +37,7 @@ type CompilerM = RWST CompilerEnv Builder CompilerState (ExceptT String IO)
 type Compiler = CompilerM ()
 
 
-runCompiler :: Compiler -> IO Builder
+runCompiler :: Compiler -> IO TL.Text
 runCompiler x = do
   defaultEnv <- do
     localVars' <- newIDAllocator 0
@@ -54,5 +55,5 @@ runCompiler x = do
         { nscrLabels = 0 }
 
   result <- runExceptT $ runRWST x defaultEnv defaultState
-  return $ either error (\((), _, b) -> b) result
+  return $ toLazyText $ either error (\((), _, b) -> b) result
 

@@ -25,7 +25,6 @@ executable PyMO2NScr
   build-depends:       base >= 4.7 && < 5
                      , text
                      , with-utf8
-                     , text-builder
                      , encoding
                      , bytestring
                      , unordered-containers
