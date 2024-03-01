@@ -1,6 +1,14 @@
 module CompilerMonad
   ( CompilerM
   , Compiler
+  , CompilerEnv
+    ( localVars
+    , globalVars
+    , pymoLabels
+    , effects
+    , currentStmt )
+  , CompilerState
+    ( nscrLabels )
   , runCompiler
   ) where
 

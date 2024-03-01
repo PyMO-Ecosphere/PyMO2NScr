@@ -6,9 +6,9 @@ module IDAllocator
   ) where
 
 import Data.HashMap.Strict as HM
-import GHC.IO (unsafePerformIO)
 import Data.Hashable (Hashable)
 import Data.IORef (IORef, newIORef, readIORef, atomicModifyIORef')
+import Control.Monad.IO.Class (MonadIO, liftIO)
 
 
 newtype Hashable a => IDAllocator a =
@@ -20,17 +20,16 @@ newIDAllocator firstId =
   IDAllocator <$> newIORef (firstId, HM.empty)
 
 
-{-# NOINLINE getID #-}
-getID :: Hashable a => a -> IDAllocator a -> Int
+getID :: (MonadIO m, Hashable a) => a -> IDAllocator a -> m Int
 getID key (IDAllocator allocator) =
-  unsafePerformIO $ atomicModifyIORef' allocator $ \(nextId, ids) ->
+  liftIO $ atomicModifyIORef' allocator $ \(nextId, ids) ->
     case HM.lookup key ids of
       Just id' -> ((nextId, ids), id')
       Nothing -> ((nextId + 1, HM.insert key nextId ids), nextId)
 
 
-allIDs :: Hashable a => IDAllocator a -> IO [(a, Int)]
-allIDs (IDAllocator allocator) = do
+allIDs :: (MonadIO m, Hashable a) => IDAllocator a -> m [(a, Int)]
+allIDs (IDAllocator allocator) = liftIO $ do
   (_, ids) <- readIORef allocator
   return $ HM.toList ids
 
