@@ -1,0 +1,40 @@
+cabal-version:       2.2
+
+name:                PyMO2NScr
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/PyMO-Ecosphere/PyMO2NScr#readme
+license:             AGPL-3.0-or-later
+license-file:        LICENSE
+author:              Seng-Jik
+maintainer:          xuchao199806@qq.com
+copyright:           Strrationalism Studio
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+
+executable PyMO2NScr
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  build-depends:       base >= 4.7 && < 5
+                     , text
+                     , with-utf8
+                     , text-builder
+                     , encoding
+                     , bytestring
+                     , unordered-containers
+                     , transformers
+                     , file-embed
+                     , PyMO-Parser
+
+  ghc-options:         -Wall
+                       -Wcompat
+                       -Widentities
+                       -Wincomplete-record-updates
+                       -Wincomplete-uni-patterns
+                       -Wmissing-export-lists
+                       -Wmissing-home-modules
+                       -Wpartial-fields
+                       -Wredundant-constraints
