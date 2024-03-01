@@ -31,7 +31,7 @@ instance ToBuilder TL.Text where
 
 
 instance ToBuilder Char where
-  toBuilder x = fromString [x]
+  toBuilder = singleton
 
 
 instance ToBuilder Double where
