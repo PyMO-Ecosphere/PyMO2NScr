@@ -6,10 +6,10 @@ import qualified Data.Encoding.GB18030 as E
 import qualified Data.Encoding.ShiftJIS as E
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Language.PyMO.GameConfig as P
 import Main.Utf8 (withUtf8)
 import System.Environment (getArgs)
-
--- PyMO2NScr <pymo-dir> [output-dir] [--target <gbk/en/sjis>]
+import System.FilePath ((</>))
 
 type Encoding = (String, T.Text -> ByteString)
 
@@ -53,12 +53,17 @@ printHelp = do
   putStrLn "        sjis                     适用于原版 ONScripter 和 NScripter"
   putStrLn ""
 
+process :: Arguments -> IO ()
+process args = do
+  gameConfig <- P.loadGameConfig $ (pymoDir args </> "gameconfig.txt")
+  putStrLn $ "PyMOGameConfig: " ++ T.unpack (P.getTextValue (T.pack "gametitle") gameConfig)
+  putStrLn ""
+  putStrLn $ "输出目录: " ++ show (outputDir args)
+  putStrLn $ "目标编码: " ++ fst (encoding args)
+
 main :: IO ()
 main = withUtf8 $ do
   args <- getArgs
   case parseArgs args of
     Nothing -> printHelp
-    Just args' -> do
-      putStrLn $ "PyMO目录: " ++ pymoDir args'
-      putStrLn $ "输出目录: " ++ show (outputDir args')
-      putStrLn $ "目标编码: " ++ fst (encoding args')
+    Just args' -> process args'

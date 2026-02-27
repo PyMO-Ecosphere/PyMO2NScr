@@ -18,11 +18,13 @@ executable PyMO2NScr
   hs-source-dirs:      src
   main-is:             Main.hs
   default-language:    Haskell2010
+  -- other-modules:       Log
   build-depends:       base >= 4.7 && < 5
                      , with-utf8
                      , text
                      , encoding
                      , bytestring
+                     , filepath
                      , PyMO-Parser
 
   ghc-options:         -Wall
