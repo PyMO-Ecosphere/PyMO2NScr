@@ -1,0 +1,3 @@
+[submodule "PyMO-Parser"]
+	path = PyMO-Parser
+	url = git@github.com:PyMO-Ecosphere/PyMO-Parser.git
