@@ -1,3 +1,6 @@
 [submodule "PyMO-Parser"]
 	path = PyMO-Parser
 	url = git@github.com:PyMO-Ecosphere/PyMO-Parser.git
+[submodule "Nscripter-API"]
+	path = Nscripter-API
+	url = git@github.com:xubeiyan/Nscripter-API.git

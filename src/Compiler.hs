@@ -6,7 +6,7 @@ module Compiler
   , makeCompilerInput
   , runCompiler ) where
 
-import Control.Monad.RWS (RWST, runRWST, get, put, modify, gets, asks)
+import Control.Monad.RWS (RWST, runRWST, modify, gets, asks)
 import qualified Control.Monad.RWS as RWS
 import qualified TextBuilder (TextBuilder, toText)
 import qualified Language.PyMO.GameConfig as PyMO
@@ -31,18 +31,21 @@ getCompilerInput :: (CompilerInput -> a) -> Compiler a
 getCompilerInput = Compiler . asks
 
 -- Compiler State
-type VarName = T.Text
-type VarId = Int
+type PyMOVarName = T.Text
+type NScrVarName = T.Text
 type ScriptName = T.Text
 type ScriptId = Int
 
 data CompilerState = CompilerState
-  { csVariables :: HM.HashMap VarName VarId
+  { csLocalVariables :: HM.HashMap PyMOVarName NScrVarName
+  , csGlobalVariables :: HM.HashMap PyMOVarName NScrVarName
   , csLoadedScripts :: HM.HashMap ScriptName (ScriptId, PyMO.Script) }
 
 emptyCompilerState :: CompilerState
 emptyCompilerState = CompilerState
-  { csVariables = HM.empty }
+  { csLocalVariables = mempty
+  , csGlobalVariables = mempty
+  , csLoadedScripts = mempty }
 
 updateCompilerState :: (CompilerState -> CompilerState) -> Compiler ()
 updateCompilerState = Compiler . modify
@@ -50,15 +53,24 @@ updateCompilerState = Compiler . modify
 getCompilerState :: (CompilerState -> a) -> Compiler a
 getCompilerState = Compiler . gets
 
-getVarId :: VarName -> Compiler VarId
-getVarId varName = Compiler $ do
-  state <- get
-  case HM.lookup varName (csVariables state) of
-    Just varId -> return varId
+pymoVarToNsVar :: PyMOVarName -> Compiler NScrVarName
+pymoVarToNsVar pymoVarName = do
+  let isGlobalVar = "S" `T.isPrefixOf` pymoVarName
+  varSet <- getCompilerState $
+    if isGlobalVar
+      then csGlobalVariables
+      else csLocalVariables
+
+  case HM.lookup pymoVarName varSet of
+    Just x -> return x
     Nothing -> do
-      let newId = HM.size (csVariables state)
-      put $ state { csVariables = HM.insert varName newId (csVariables state) }
-      return newId
+      let nscrVarNamePrefix = if isGlobalVar then "PYMO_G_" else "PYMO_S_"
+      let nscrVarName = T.pack $ nscrVarNamePrefix <> show (HM.size varSet)
+      updateCompilerState $ \x ->
+        if isGlobalVar
+          then x { csGlobalVariables = HM.insert pymoVarName nscrVarName varSet }
+          else x { csLocalVariables = HM.insert pymoVarName nscrVarName varSet }
+      return nscrVarName
 
 loadPyMOScript :: ScriptName -> Compiler (ScriptId, PyMO.Script)
 loadPyMOScript scriptName = do
