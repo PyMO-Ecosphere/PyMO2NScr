@@ -1,7 +1,11 @@
 &&header
 
 *define
+
+globalon
+
 &&defines
+
 game
 
 *start

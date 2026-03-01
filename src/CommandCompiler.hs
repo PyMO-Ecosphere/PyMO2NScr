@@ -41,7 +41,7 @@ type CommandHandler a = PyMO.Stmt -> Compiler a
 
 getNScrLabel :: ScriptId -> LabelId -> TB.TextBuilder
 getNScrLabel scriptId labelId =
-  "*PYMO_" <> TB.string (show scriptId) <> "_" <> TB.string (show labelId)
+  "*PYMO_" <> TB.decimal scriptId <> "_" <> TB.decimal labelId
 
 pymoArgFailIfNotExists :: PyMO.Stmt -> Int -> Compiler T.Text
 pymoArgFailIfNotExists stmt index = do

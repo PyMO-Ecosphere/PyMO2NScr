@@ -3,11 +3,17 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module Compiler
-  ( CompilerInput
+  ( CompilerInput (ciPyMOGameConfig)
   , Compiler
   , ScriptName
   , ScriptId
   , makeCompilerInput
+  , csLocalVariables
+  , csGlobalVariables
+  , csLabelCount
+  , updateCompilerState
+  , getCompilerInput
+  , getCompilerState
   , loadPyMOScript
   , logInfo
   , warnWithStmt
@@ -16,13 +22,15 @@ module Compiler
   , isScriptCompiled
   , markAsCompiled
   , writeBody
+  , writeDefine
   , AssetKind(..)
   , addAsset
-  , pymoVarToNSVar ) where
+  , pymoVarToNSVar
+  , writeHeader ) where
 
 import Control.Monad.RWS (RWST, MonadIO, runRWST, modify, gets, asks)
 import qualified Control.Monad.RWS as RWS
-import qualified TextBuilder (TextBuilder, toText, string)
+import qualified TextBuilder as TB
 import qualified Language.PyMO.GameConfig as PyMO
 import qualified Language.PyMO.Script as PyMO
 import qualified Data.Text as T
@@ -50,22 +58,24 @@ getCompilerInput = Compiler . asks
 
 -- Compiler State
 type PyMOVarName = T.Text
-type NScrVarName = TextBuilder.TextBuilder
+type NScrVarName = TB.TextBuilder
 type ScriptName = T.Text
 type ScriptId = Int
 
 data CompilerState = CompilerState
-  { csLocalVariables :: HM.HashMap PyMOVarName NScrVarName
-  , csGlobalVariables :: HM.HashMap PyMOVarName NScrVarName
+  { csLocalVariables :: HM.HashMap PyMOVarName T.Text
+  , csGlobalVariables :: HM.HashMap PyMOVarName T.Text
   , csLoadedScripts :: HM.HashMap ScriptName (ScriptId, PyMO.Script)
-  , csCompiledScripts :: HS.HashSet ScriptName }
+  , csCompiledScripts :: HS.HashSet ScriptName
+  , csLabelCount :: Int }
 
 emptyCompilerState :: CompilerState
 emptyCompilerState = CompilerState
   { csLocalVariables = mempty
   , csGlobalVariables = mempty
   , csLoadedScripts = mempty
-  , csCompiledScripts = mempty }
+  , csCompiledScripts = mempty
+  , csLabelCount = 10 }
 
 updateCompilerState :: (CompilerState -> CompilerState) -> Compiler ()
 updateCompilerState = Compiler . modify
@@ -82,15 +92,15 @@ pymoVarToNSVar pymoVarName = do
       else csLocalVariables
 
   case HM.lookup pymoVarName varSet of
-    Just x -> return x
+    Just x -> return $ TB.text x
     Nothing -> do
-      let nscrVarNamePrefix = if isGlobalVar then "PYMO_G_" else "PYMO_S_"
-      let nscrVarName = nscrVarNamePrefix <> TextBuilder.string (show (HM.size varSet))
+      let nscrVarNamePrefix = if isGlobalVar then "PYMO_G_" else "PYMO_L_"
+      let nscrVarName = nscrVarNamePrefix <> T.pack (show (HM.size varSet))
       updateCompilerState $ \x ->
         if isGlobalVar
           then x { csGlobalVariables = HM.insert pymoVarName nscrVarName varSet }
           else x { csLocalVariables = HM.insert pymoVarName nscrVarName varSet }
-      return nscrVarName
+      return $ TB.text nscrVarName
 
 loadPyMOScript :: ScriptName -> Compiler (ScriptId, PyMO.Script)
 loadPyMOScript scriptName = do
@@ -153,7 +163,7 @@ addAsset assetKind' assetName' =
 
 -- Compiler Output
 
-type Hole = TextBuilder.TextBuilder
+type Hole = TB.TextBuilder
 
 data CompilerOutput = CompilerOutput
   { coHeader :: Hole
@@ -175,8 +185,11 @@ instance Monoid CompilerOutput where
 writeCompilerOutput :: CompilerOutput -> Compiler ()
 writeCompilerOutput output = Compiler (RWS.tell output)
 
-newline :: TextBuilder.TextBuilder
-newline = TextBuilder.string "\n"
+newline :: TB.TextBuilder
+newline = TB.string "\n"
+
+writeHeader :: Hole -> Compiler ()
+writeHeader hole = writeCompilerOutput mempty { coHeader = hole }
 
 writeDefine :: Hole -> Compiler ()
 writeDefine hole = writeCompilerOutput mempty { coDefines = hole <> newline }
@@ -240,4 +253,4 @@ runCompiler ci (Compiler compiler) = do
         Just holeName ->
           case lookup holeName holeMapping of
             Nothing -> fail $ "UNKNOWN HOLE: "++ T.unpack holeName
-            Just holeGetter -> return $ TextBuilder.toText $ holeGetter co
+            Just holeGetter -> return $ TB.toText $ holeGetter co

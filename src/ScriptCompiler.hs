@@ -9,6 +9,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified CommandCompiler as CC
 import Control.Monad (forM, forM_)
 import Data.Maybe (catMaybes)
+import DefinesGenerator
 
 collectBlockUntilNextLabel ::
   [PyMO.Stmt] -> Compiler ([PyMO.Stmt], Maybe (CC.LabelName, [PyMO.Stmt]))
@@ -59,6 +60,7 @@ compileBlock ::
   CC.Block ->
   Compiler [CC.ReferencedScriptName]
 compileBlock scriptId allLabeledBlocks nextBlocks curLabelId block = do
+  updateCompilerState $ \x -> x { csLabelCount = csLabelCount x + 1 }
   writeBody $ CC.getNScrLabel scriptId curLabelId
   catMaybes <$> (forM block $ compileCommand scriptId allLabeledBlocks nextBlocks)
 
@@ -94,7 +96,15 @@ compileAllScripts startScriptName = do
   forM_ refs compileAllScripts
 
 showInfo :: ScriptName -> Compiler ()
-showInfo scrName = compileAllScripts scrName
+showInfo scrName = do
+  _ <- pymoVarToNSVar "A"
+  _ <- pymoVarToNSVar "B"
+  _ <- pymoVarToNSVar "C"
+  _ <- pymoVarToNSVar "SA"
+  _ <- pymoVarToNSVar "SB"
+  _ <- pymoVarToNSVar "SC"
+  compileAllScripts scrName
+  generateDefines
 
 test :: Compiler ()
 test = do
