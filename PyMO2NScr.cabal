@@ -21,6 +21,7 @@ executable PyMO2NScr
   other-modules:       Compiler
                      , CommandCompiler
                      , ScriptCompiler
+                     , DefinesGenerator
 
   build-depends:       base >= 4.7 && < 5
                      , with-utf8
