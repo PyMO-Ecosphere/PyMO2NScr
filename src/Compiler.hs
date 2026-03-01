@@ -9,7 +9,9 @@ module Compiler
   , makeCompilerInput
   , loadPyMOScript
   , logInfo
-  , runCompiler ) where
+  , runCompiler
+  , isScriptCompiled
+  , markAsCompiled ) where
 
 import Control.Monad.RWS (RWST, runRWST, modify, gets, asks)
 import qualified Control.Monad.RWS as RWS
