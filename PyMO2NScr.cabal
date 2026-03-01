@@ -31,6 +31,7 @@ executable PyMO2NScr
                      , mtl
                      , text-builder
                      , file-embed
+                     , hashable
                      , unordered-containers
                      , PyMO-Parser
 

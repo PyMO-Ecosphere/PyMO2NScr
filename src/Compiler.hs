@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Compiler
   ( CompilerInput
@@ -9,21 +10,27 @@ module Compiler
   , makeCompilerInput
   , loadPyMOScript
   , logInfo
+  , warnWithStmt
+  , failWithStmt
   , runCompiler
   , isScriptCompiled
-  , markAsCompiled ) where
+  , markAsCompiled
+  , writeBody ) where
 
-import Control.Monad.RWS (RWST, runRWST, modify, gets, asks)
+import Control.Monad.RWS (RWST, MonadIO, runRWST, modify, gets, asks)
 import qualified Control.Monad.RWS as RWS
-import qualified TextBuilder (TextBuilder, toText)
+import qualified TextBuilder (TextBuilder, toText, string)
 import qualified Language.PyMO.GameConfig as PyMO
 import qualified Language.PyMO.Script as PyMO
 import qualified Data.Text as T
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified Data.Text.Encoding as T
+import GHC.Generics
 import Data.FileEmbed (embedFile)
 import System.FilePath ((</>))
+import System.Exit (exitFailure)
+import Data.Hashable (Hashable)
 
 -- Compiler Input
 data CompilerInput = CompilerInput
@@ -40,7 +47,7 @@ getCompilerInput = Compiler . asks
 
 -- Compiler State
 type PyMOVarName = T.Text
-type NScrVarName = T.Text
+type NScrVarName = TextBuilder.TextBuilder
 type ScriptName = T.Text
 type ScriptId = Int
 
@@ -54,7 +61,8 @@ emptyCompilerState :: CompilerState
 emptyCompilerState = CompilerState
   { csLocalVariables = mempty
   , csGlobalVariables = mempty
-  , csLoadedScripts = mempty }
+  , csLoadedScripts = mempty
+  , csCompiledScripts = mempty }
 
 updateCompilerState :: (CompilerState -> CompilerState) -> Compiler ()
 updateCompilerState = Compiler . modify
@@ -62,8 +70,8 @@ updateCompilerState = Compiler . modify
 getCompilerState :: (CompilerState -> a) -> Compiler a
 getCompilerState = Compiler . gets
 
-pymoVarToNsVar :: PyMOVarName -> Compiler NScrVarName
-pymoVarToNsVar pymoVarName = do
+pymoVarToNSVar :: PyMOVarName -> Compiler NScrVarName
+pymoVarToNSVar pymoVarName = do
   let isGlobalVar = "S" `T.isPrefixOf` pymoVarName
   varSet <- getCompilerState $
     if isGlobalVar
@@ -74,7 +82,7 @@ pymoVarToNsVar pymoVarName = do
     Just x -> return x
     Nothing -> do
       let nscrVarNamePrefix = if isGlobalVar then "PYMO_G_" else "PYMO_S_"
-      let nscrVarName = T.pack $ nscrVarNamePrefix <> show (HM.size varSet)
+      let nscrVarName = nscrVarNamePrefix <> TextBuilder.string (show (HM.size varSet))
       updateCompilerState $ \x ->
         if isGlobalVar
           then x { csGlobalVariables = HM.insert pymoVarName nscrVarName varSet }
@@ -89,7 +97,7 @@ loadPyMOScript scriptName = do
     Just x -> return x
     Nothing -> do
       gameDir <- getCompilerInput ciPyMOGameDir
-      script <- liftIO $ PyMO.loadPyMOScript gameDir (T.unpack scriptName)
+      script <- RWS.liftIO $ PyMO.loadPyMOScript gameDir (T.unpack scriptName)
       let scriptId = HM.size loadedScripts
           loadedScripts' = HM.insert scriptNameLowered (scriptId, script) loadedScripts
       updateCompilerState $ \x -> x { csLoadedScripts =  loadedScripts' }
@@ -104,24 +112,74 @@ markAsCompiled scriptName =
   updateCompilerState $ \x -> x {
     csCompiledScripts = HS.insert (T.toLower scriptName) (csCompiledScripts x) }
 
+-- Asset
+data AssetKind
+  = Bg
+  | Bgm
+  | Chara
+  | Se
+  | System
+  | Video
+  | Voice
+  deriving ( Show, Eq, Generic )
+
+type AssetName = T.Text
+type AssetNameLowered = T.Text
+newtype AssetKey = AssetKey (AssetKind, AssetNameLowered)
+  deriving ( Eq, Show, Generic )
+
+instance Hashable AssetKind
+instance Hashable AssetKey
+
+data Asset = Asset
+  { assetName :: AssetName
+  , assetNameLowered :: AssetNameLowered
+  , assetKind :: AssetKind }
+  deriving ( Show, Eq )
+
+addAsset :: AssetKind -> AssetName -> Compiler ()
+addAsset assetKind' assetName' =
+  writeCompilerOutput mempty { coAssets = HM.singleton k asset }
+  where
+    k = AssetKey (assetKind', assetNameLowered')
+    assetNameLowered' = T.toLower assetName'
+    asset = Asset
+      { assetName = assetName'
+      , assetKind = assetKind'
+      , assetNameLowered = assetNameLowered' }
+
 -- Compiler Output
+
 type Hole = TextBuilder.TextBuilder
 
 data CompilerOutput = CompilerOutput
   { coHeader :: Hole
   , coDefines :: Hole
-  , coBody :: Hole }
+  , coBody :: Hole
+  , coAssets :: HM.HashMap AssetKey Asset }
 
 instance Semigroup CompilerOutput where
   a <> b = CompilerOutput
     { coHeader = coHeader a <> coHeader b
     , coDefines = coDefines a <> coDefines b
     , coBody = coBody a <> coBody b
-    }
+    , coAssets = coAssets a <> coAssets b }
 
 instance Monoid CompilerOutput where
-  mempty = CompilerOutput mempty mempty mempty
+  mempty = CompilerOutput mempty mempty mempty mempty
   mappend = (<>)
+
+writeCompilerOutput :: CompilerOutput -> Compiler ()
+writeCompilerOutput output = Compiler (RWS.tell output)
+
+newline :: TextBuilder.TextBuilder
+newline = TextBuilder.string "\n"
+
+writeDefine :: Hole -> Compiler ()
+writeDefine hole = writeCompilerOutput mempty { coDefines = hole <> newline }
+
+writeBody :: Hole -> Compiler ()
+writeBody hole = writeCompilerOutput mempty { coBody = hole <> newline }
 
 -- Compiler
 newtype Compiler x =
@@ -138,16 +196,35 @@ instance Monad Compiler where
   return = pure
   Compiler m >>= f = Compiler (m >>= (\x -> let Compiler r = f x in r))
 
-liftIO :: IO a -> Compiler a
-liftIO = Compiler . RWS.liftIO
+instance MonadIO Compiler where
+  liftIO = Compiler . RWS.liftIO
+
+instance MonadFail Compiler where
+  fail x = RWS.liftIO $ do
+    putStr $ "\n编译失败:\n\n" ++ x ++ "\n\n"
+    exitFailure
 
 logInfo :: String -> Compiler ()
-logInfo = liftIO . putStrLn
+logInfo = RWS.liftIO . putStrLn
+
+stmtMsg :: PyMO.Stmt -> String
+stmtMsg stmt =
+  "在脚本 "++ PyMO.stmtScriptName stmt
+  ++ " 第" ++ show (PyMO.stmtLineNumber stmt)
+  ++ "行："
+
+warnWithStmt :: PyMO.Stmt -> String -> Compiler ()
+warnWithStmt stmt msg =
+  logInfo $ "【警告】" ++ stmtMsg stmt ++ msg
+
+failWithStmt :: PyMO.Stmt -> String -> Compiler a
+failWithStmt stmt msg = fail $
+  stmtMsg stmt ++ "\n\n\t" ++ msg
 
 runCompiler :: CompilerInput -> Compiler () -> IO T.Text
 runCompiler ci (Compiler compiler) = do
   ((), _, co) <- runRWST compiler ci emptyCompilerState
-  return $ T.unlines $ fmap (applyHole co) nscrTemplate
+  T.unlines <$> (mapM (applyHole co) nscrTemplate)
   where
     nscrTemplate = T.lines $ T.decodeUtf8 $(embedFile "./src/nscr-template.txt")
     holeMapping =
@@ -156,8 +233,8 @@ runCompiler ci (Compiler compiler) = do
       , (T.pack "body", coBody) ]
     applyHole co line =
       case T.stripPrefix "&&" line of
-        Nothing -> line
+        Nothing -> return line
         Just holeName ->
           case lookup holeName holeMapping of
-            Nothing -> T.concat [ "<UNKNOWN HOLE: ", holeName, ">" ]
-            Just holeGetter -> TextBuilder.toText $ holeGetter co
+            Nothing -> fail $ "UNKNOWN HOLE: "++ T.unpack holeName
+            Just holeGetter -> return $ TextBuilder.toText $ holeGetter co
