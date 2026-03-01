@@ -15,7 +15,7 @@ collectBlockUntilNextLabel ::
 collectBlockUntilNextLabel [] = return ([], Nothing)
 collectBlockUntilNextLabel (x : xs)
   | PyMO.stmtCommand x == "label" =
-      (CC.pymoArg x 0 >>= \labelName -> return ([], Just (labelName, xs)))
+      (CC.pymoArgFailIfNotExists x 0 >>= \labelName -> return ([], Just (labelName, xs)))
   | otherwise = do
     (xs', nextLabelName) <- collectBlockUntilNextLabel xs
     return (x : xs', nextLabelName)

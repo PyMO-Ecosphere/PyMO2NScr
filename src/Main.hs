@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as B
 import qualified Data.Encoding as E
 import qualified Data.Encoding.GB18030 as E
 import qualified Data.Encoding.ShiftJIS as E
@@ -8,6 +9,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Main.Utf8 (withUtf8)
 import System.Environment (getArgs)
+import System.FilePath ((</>))
 import Compiler (makeCompilerInput, runCompiler)
 import ScriptCompiler
 
@@ -57,7 +59,11 @@ process :: Arguments -> IO ()
 process args = do
   ci <- makeCompilerInput $ pymoDir args
   result <- runCompiler ci test
-  putStrLn $ T.unpack result
+  let outputFile = pymoDir args </> "00.txt"
+      (_, encodeFunc) = encoding args
+      encoded = encodeFunc result
+  B.writeFile outputFile encoded
+  putStrLn $ "编译完成，输出到 " ++ outputFile ++ " 。"
 
 main :: IO ()
 main = withUtf8 $ do

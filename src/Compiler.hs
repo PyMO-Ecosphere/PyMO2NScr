@@ -15,7 +15,10 @@ module Compiler
   , runCompiler
   , isScriptCompiled
   , markAsCompiled
-  , writeBody ) where
+  , writeBody
+  , AssetKind(..)
+  , addAsset
+  , pymoVarToNSVar ) where
 
 import Control.Monad.RWS (RWST, MonadIO, runRWST, modify, gets, asks)
 import qualified Control.Monad.RWS as RWS
