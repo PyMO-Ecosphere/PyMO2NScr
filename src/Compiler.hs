@@ -3,7 +3,12 @@
 
 module Compiler
   ( CompilerInput
+  , Compiler
+  , ScriptName
+  , ScriptId
   , makeCompilerInput
+  , loadPyMOScript
+  , logInfo
   , runCompiler ) where
 
 import Control.Monad.RWS (RWST, runRWST, modify, gets, asks)
@@ -13,6 +18,7 @@ import qualified Language.PyMO.GameConfig as PyMO
 import qualified Language.PyMO.Script as PyMO
 import qualified Data.Text as T
 import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
 import qualified Data.Text.Encoding as T
 import Data.FileEmbed (embedFile)
 import System.FilePath ((</>))
@@ -39,7 +45,8 @@ type ScriptId = Int
 data CompilerState = CompilerState
   { csLocalVariables :: HM.HashMap PyMOVarName NScrVarName
   , csGlobalVariables :: HM.HashMap PyMOVarName NScrVarName
-  , csLoadedScripts :: HM.HashMap ScriptName (ScriptId, PyMO.Script) }
+  , csLoadedScripts :: HM.HashMap ScriptName (ScriptId, PyMO.Script)
+  , csCompiledScripts :: HS.HashSet ScriptName }
 
 emptyCompilerState :: CompilerState
 emptyCompilerState = CompilerState
@@ -74,16 +81,26 @@ pymoVarToNsVar pymoVarName = do
 
 loadPyMOScript :: ScriptName -> Compiler (ScriptId, PyMO.Script)
 loadPyMOScript scriptName = do
+  let scriptNameLowered = T.toLower scriptName
   loadedScripts <- getCompilerState csLoadedScripts
-  case HM.lookup scriptName loadedScripts of
+  case HM.lookup scriptNameLowered loadedScripts of
     Just x -> return x
     Nothing -> do
       gameDir <- getCompilerInput ciPyMOGameDir
       script <- liftIO $ PyMO.loadPyMOScript gameDir (T.unpack scriptName)
       let scriptId = HM.size loadedScripts
-          loadedScripts' = HM.insert scriptName (scriptId, script) loadedScripts
+          loadedScripts' = HM.insert scriptNameLowered (scriptId, script) loadedScripts
       updateCompilerState $ \x -> x { csLoadedScripts =  loadedScripts' }
       return (scriptId, script)
+
+isScriptCompiled :: ScriptName -> Compiler Bool
+isScriptCompiled scriptName =
+  HS.member (T.toLower scriptName) <$> getCompilerState csCompiledScripts
+
+markAsCompiled :: ScriptName -> Compiler ()
+markAsCompiled scriptName =
+  updateCompilerState $ \x -> x {
+    csCompiledScripts = HS.insert (T.toLower scriptName) (csCompiledScripts x) }
 
 -- Compiler Output
 type Hole = TextBuilder.TextBuilder
@@ -121,6 +138,9 @@ instance Monad Compiler where
 
 liftIO :: IO a -> Compiler a
 liftIO = Compiler . RWS.liftIO
+
+logInfo :: String -> Compiler ()
+logInfo = liftIO . putStrLn
 
 runCompiler :: CompilerInput -> Compiler () -> IO T.Text
 runCompiler ci (Compiler compiler) = do

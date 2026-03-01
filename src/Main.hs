@@ -9,6 +9,7 @@ import qualified Data.Text.Encoding as T
 import Main.Utf8 (withUtf8)
 import System.Environment (getArgs)
 import Compiler (makeCompilerInput, runCompiler)
+import ScriptCompiler
 
 type Encoding = (String, T.Text -> ByteString)
 
@@ -55,7 +56,7 @@ printHelp = do
 process :: Arguments -> IO ()
 process args = do
   ci <- makeCompilerInput $ pymoDir args
-  result <- runCompiler ci (pure ())
+  result <- runCompiler ci test
   putStrLn $ T.unpack result
 
 main :: IO ()
