@@ -1,0 +1,9 @@
+&&header
+
+*define
+&&defines
+game
+
+*start
+&&body
+end

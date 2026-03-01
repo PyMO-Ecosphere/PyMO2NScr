@@ -6,10 +6,9 @@ import qualified Data.Encoding.GB18030 as E
 import qualified Data.Encoding.ShiftJIS as E
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
-import qualified Language.PyMO.GameConfig as P
 import Main.Utf8 (withUtf8)
 import System.Environment (getArgs)
-import System.FilePath ((</>))
+import Compiler (makeCompilerInput, runCompiler)
 
 type Encoding = (String, T.Text -> ByteString)
 
@@ -55,11 +54,9 @@ printHelp = do
 
 process :: Arguments -> IO ()
 process args = do
-  gameConfig <- P.loadGameConfig $ (pymoDir args </> "gameconfig.txt")
-  putStrLn $ "PyMOGameConfig: " ++ T.unpack (P.getTextValue (T.pack "gametitle") gameConfig)
-  putStrLn ""
-  putStrLn $ "输出目录: " ++ show (outputDir args)
-  putStrLn $ "目标编码: " ++ fst (encoding args)
+  ci <- makeCompilerInput $ pymoDir args
+  result <- runCompiler ci (pure ())
+  putStrLn $ T.unpack result
 
 main :: IO ()
 main = withUtf8 $ do
