@@ -12,7 +12,6 @@ module CommandCompiler
   , CommandHandler
   , getNScrLabel
   , trivialCommands
-  , pymoArgFailIfNotExists
   , pymoArg
   , goto
   , ifGoto
@@ -59,23 +58,13 @@ getNScrLabel :: ScriptId -> LabelId -> TB.TextBuilder
 getNScrLabel scriptId labelId =
   "*PYMO_" <> TB.decimal scriptId <> "_" <> TB.decimal labelId
 
-pymoArgFailIfNotExists :: PyMO.Stmt -> Int -> Compiler T.Text
-pymoArgFailIfNotExists stmt index = do
+type PyMOArg = T.Text
+
+pymoArg :: PyMO.Stmt -> Int -> Compiler PyMOArg
+pymoArg stmt index = do
    case PyMO.stmtArgs stmt !? index of
     Just x -> return x
     Nothing -> throwWithStmt stmt $ "无法访问第" ++ show (index + 1) ++ "个参数。"
-
-type PyMOArg = T.Text
-
-pymoArg :: PyMO.Stmt -> Int -> ([PyMOArg] -> Compiler ()) -> Compiler ()
-pymoArg stmt argCount action = do
-  let args = PyMO.stmtArgs stmt
-      argCount' = length args
-  if argCount' < argCount
-    then warnWithStmt stmt $
-      "需要 " ++ show argCount ++
-      " 个参数，但提供了 " ++ show argCount' ++ " 个参数，忽略该命令。"
-    else action args
 
 -- non-trivial commands
 
@@ -126,14 +115,14 @@ parseCondition stmt expr = do
 
 goto :: ScriptId -> AllLabeledBlocks -> NextLabeledBlocks -> CommandHandler ()
 goto scriptId allLabels nextLabels stmt = do
-  label <- pymoArgFailIfNotExists stmt 0
+  label <- pymoArg stmt 0
   nsLabel <- findGotoNScrLabel scriptId allLabels nextLabels label stmt
   writeBody $ "goto " <> nsLabel
 
 ifGoto :: ScriptId -> AllLabeledBlocks -> NextLabeledBlocks -> CommandHandler ()
 ifGoto scriptId allLabels nextLabels stmt = do
-  condition <- pymoArgFailIfNotExists stmt 0
-  gotoPart <- pymoArgFailIfNotExists stmt 1
+  condition <- pymoArg stmt 0
+  gotoPart <- pymoArg stmt 1
   let conditionExpr = T.strip condition
   let gotoParts = T.words (T.strip gotoPart)
   case gotoParts of
@@ -146,10 +135,9 @@ ifGoto scriptId allLabels nextLabels stmt = do
       writeBody $ "if " <> nscrCondition <> " goto " <> nsLabel
     _ -> throwWithStmt stmt $ "if命令缺少'goto'关键字，gotoPart: " ++ T.unpack gotoPart
 
-
 changeTemplate :: TB.TextBuilder -> CommandHandler ReferencedScriptName
 changeTemplate nsCmd stmt = do
-  targetScriptName <- pymoArgFailIfNotExists stmt 0
+  targetScriptName <- pymoArg stmt 0
   (scrId, _) <- loadPyMOScript targetScriptName
   writeBody $ nsCmd <> " " <> getNScrLabel scrId 0
   return targetScriptName
@@ -165,11 +153,11 @@ call = changeTemplate "gosub"
 -- 背景命令（支持可选参数：渐变效果、时间、x,y坐标）
 bgCommand :: CommandHandler ()
 bgCommand stmt = do
-  pymoArg stmt 1 $ \[bgName] -> do
-    addAsset Bg bgName
-    -- 简单实现：忽略可选参数，只使用文件名
-    -- TODO: 从gameconfig.txt获取文件扩展名
-    writeBody $ "bg \"bg/" <> TB.string (T.unpack bgName) <> ".jpg\""
+  bgName <- pymoArg stmt 0
+  addAsset Bg bgName
+  -- 简单实现：忽略可选参数，只使用文件名
+  -- TODO: 从gameconfig.txt获取文件扩展名
+  writeBody $ "bg \"bg/" <> TB.string (T.unpack bgName) <> ".jpg\""
 
 -- 文本显示命令（支持可选说话人名字）
 sayCommand :: CommandHandler ()
@@ -194,8 +182,8 @@ textCommand :: CommandHandler ()
 textCommand stmt = do
   -- 参数复杂：content, x1,y1,x2,y2,color,size,show_immediately
   -- 简单实现：只输出文本内容
-  pymoArg stmt 1 $ \[textContent] -> do
-    writeBody $ TB.string (T.unpack textContent)
+  textContent <- pymoArg stmt 0
+  writeBody $ TB.string (T.unpack textContent)
 
 -- 消除文字命令
 textOffCommand :: CommandHandler ()
@@ -210,9 +198,9 @@ waitkeyCommand _stmt = do
 -- 设置章节标题命令
 titleCommand :: CommandHandler ()
 titleCommand stmt = do
-  pymoArg stmt 1 $ \[titleContent] -> do
-    -- 记录标题，但NScripter中可能需要特殊处理
-    writeBody $ "; 标题: " <> TB.string (T.unpack titleContent)
+  titleContent <- pymoArg stmt 0
+  -- 记录标题，但NScripter中可能需要特殊处理
+  writeBody $ "; 标题: " <> TB.string (T.unpack titleContent)
 
 -- 显示章节标题命令
 titleDspCommand :: CommandHandler ()
@@ -222,8 +210,9 @@ titleDspCommand _stmt = do
 -- 屏幕闪光效果命令
 flashCommand :: CommandHandler ()
 flashCommand stmt = do
-  pymoArg stmt 2 $ \[color, time] -> do
-    writeBody $ "flash " <> TB.string (T.unpack color) <> "," <> TB.string (T.unpack time)
+  color <- pymoArg stmt 0
+  time <- pymoArg stmt 1
+  writeBody $ "flash " <> TB.string (T.unpack color) <> "," <> TB.string (T.unpack time)
 
 -- 画面振动效果命令
 quakeCommand :: CommandHandler ()
@@ -233,22 +222,24 @@ quakeCommand _stmt = do
 -- 屏幕淡出命令
 fadeOutCommand :: CommandHandler ()
 fadeOutCommand stmt = do
-  pymoArg stmt 2 $ \[color, time] -> do
-    writeBody $ "fadeout " <> TB.string (T.unpack color) <> "," <> TB.string (T.unpack time)
+  color <- pymoArg stmt 0
+  time <- pymoArg stmt 1
+  writeBody $ "fadeout " <> TB.string (T.unpack color) <> "," <> TB.string (T.unpack time)
 
 -- 屏幕淡入命令
 fadeInCommand :: CommandHandler ()
 fadeInCommand stmt = do
-  pymoArg stmt 1 $ \[time] -> do
-    writeBody $ "fadein " <> TB.string (T.unpack time)
+  time <- pymoArg stmt 0
+  writeBody $ "fadein " <> TB.string (T.unpack time)
 
 -- 更换对话框图片命令
 textboxCommand :: CommandHandler ()
 textboxCommand stmt = do
-  pymoArg stmt 2 $ \[messageImg, nameImg] -> do
-    addAsset System messageImg
-    addAsset System nameImg
-    writeBody $ "textbox " <> TB.string (T.unpack messageImg) <> "," <> TB.string (T.unpack nameImg)
+  messageImg <- pymoArg stmt 0
+  nameImg <- pymoArg stmt 1
+  addAsset System messageImg
+  addAsset System nameImg
+  writeBody $ "textbox " <> TB.string (T.unpack messageImg) <> "," <> TB.string (T.unpack nameImg)
 
 -- 立绘振动效果命令
 charaQuakeCommand :: CommandHandler ()
@@ -297,15 +288,15 @@ seStopCommand _stmt = do
 -- 语音命令
 voCommand :: CommandHandler ()
 voCommand stmt = do
-  pymoArg stmt 1 $ \[voiceName] -> do
-    addAsset Voice voiceName
-    writeBody $ "voice \"voice/" <> TB.string (T.unpack voiceName) <> ".wav\""
+  voiceName <- pymoArg stmt 0
+  addAsset Voice voiceName
+  writeBody $ "voice \"voice/" <> TB.string (T.unpack voiceName) <> ".wav\""
 
 -- 等待命令
 waitCommand :: CommandHandler ()
 waitCommand stmt = do
-  pymoArg stmt 1 $ \[time] -> do
-    writeBody $ "wait " <> TB.string (T.unpack time)
+  time <- pymoArg stmt 0
+  writeBody $ "wait " <> TB.string (T.unpack time)
 
 -- 等待音效结束命令
 waitSeCommand :: CommandHandler ()
@@ -315,11 +306,12 @@ waitSeCommand _stmt = do
 -- 随机数生成命令
 randCommand :: CommandHandler ()
 randCommand stmt = do
-  pymoArg stmt 3 $ \args -> do
-    let [varName, minVal, maxVal] = args
-    -- 转换为NScripter变量名
-    nsVar <- pymoVarToNSVar varName
-    writeBody $ "rnd " <> nsVar <> "," <> TB.string (T.unpack minVal) <> "," <> TB.string (T.unpack maxVal)
+  varName <- pymoArg stmt 0
+  minVal <- pymoArg stmt 1
+  maxVal <- pymoArg stmt 2
+  -- 转换为NScripter变量名
+  nsVar <- pymoVarToNSVar varName
+  writeBody $ "rnd " <> nsVar <> "," <> TB.string (T.unpack minVal) <> "," <> TB.string (T.unpack maxVal)
 
 -- 立绘下沉效果命令（暂时与振动效果相同）
 charaDownCommand :: CommandHandler ()

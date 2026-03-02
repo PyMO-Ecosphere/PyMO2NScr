@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module ScriptCompiler (test) where
+module ScriptCompiler (compileAllScripts) where
 
 import Compiler
 import qualified Language.PyMO.Script as PyMO
@@ -10,13 +10,14 @@ import qualified CommandCompiler as CC
 import Control.Monad (forM, forM_)
 import Data.Maybe (catMaybes)
 import DefinesGenerator
+import Control.Monad.Error.Class (MonadError(catchError))
 
 collectBlockUntilNextLabel ::
   [PyMO.Stmt] -> Compiler ([PyMO.Stmt], Maybe (CC.LabelName, [PyMO.Stmt]))
 collectBlockUntilNextLabel [] = return ([], Nothing)
 collectBlockUntilNextLabel (x : xs)
   | PyMO.stmtCommand x == "label" =
-      (CC.pymoArgFailIfNotExists x 0 >>= \labelName -> return ([], Just (labelName, xs)))
+      (CC.pymoArg x 0 >>= \labelName -> return ([], Just (labelName, xs)))
   | otherwise = do
     (xs', nextLabelName) <- collectBlockUntilNextLabel xs
     return (x : xs', nextLabelName)
@@ -50,7 +51,12 @@ compileCommand scriptId allLabeledBlocks nextLabeledBlocks stmt =
         Nothing -> do
           warnWithStmt stmt $ "无法处理命令 " ++ (T.unpack $ PyMO.stmtCommand stmt) ++ " ，忽略该命令。"
           return Nothing
-        Just x -> x stmt >> pure Nothing
+        Just x -> do
+          catchError (x stmt) $ \(stmt', msg) ->
+            case stmt' of
+              Nothing -> warn msg
+              Just stmt'' -> warnWithStmt stmt'' msg
+          return Nothing
 
 compileBlock ::
   ScriptId ->
@@ -90,22 +96,11 @@ compileScript scriptName = do
   else
     return []
 
-compileAllScripts :: ScriptName -> Compiler ()
-compileAllScripts startScriptName = do
+compileAllScripts' :: ScriptName -> Compiler ()
+compileAllScripts' startScriptName = do
   refs <- compileScript startScriptName
-  forM_ refs compileAllScripts
+  forM_ refs compileAllScripts'
 
-showInfo :: ScriptName -> Compiler ()
-showInfo scrName = do
-  _ <- pymoVarToNSVar "A"
-  _ <- pymoVarToNSVar "B"
-  _ <- pymoVarToNSVar "C"
-  _ <- pymoVarToNSVar "SA"
-  _ <- pymoVarToNSVar "SB"
-  _ <- pymoVarToNSVar "SC"
-  compileAllScripts scrName
-  generateDefines
-
-test :: Compiler ()
-test = do
-  showInfo "start"
+compileAllScripts :: ScriptName -> Compiler ()
+compileAllScripts startScriptName =
+  compileAllScripts' startScriptName >> generateDefines

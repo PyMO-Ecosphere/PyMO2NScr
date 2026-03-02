@@ -224,8 +224,10 @@ stmtMsg stmt =
   ++ "行："
 
 warnWithStmt :: PyMO.Stmt -> String -> Compiler ()
-warnWithStmt stmt msg =
-  logInfo $ "【警告】" ++ stmtMsg stmt ++ msg
+warnWithStmt stmt msg = warn $ stmtMsg stmt ++ msg
+
+warn :: String -> Compiler ()
+warn msg = logInfo $ "【警告】" ++ msg
 
 throwWithStmt :: PyMO.Stmt -> String -> Compiler a
 throwWithStmt stmt msg = E.throwError ((Just stmt), msg)

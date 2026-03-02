@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main (main) where
 
 import Data.ByteString (ByteString)
@@ -65,7 +67,7 @@ printHelp = do
 process :: Arguments -> IO ()
 process args = do
   ci <- makeCompilerInput $ pymoDir args
-  result <- runCompilerExitIfFailed ci test
+  result <- runCompilerExitIfFailed ci $ compileAllScripts "start"
   let outputFile = pymoDir args </> "00.txt"
       (_, encodeFunc) = encoding args
       encoded = encodeFunc result

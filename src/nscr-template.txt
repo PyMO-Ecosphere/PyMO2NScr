@@ -1,16 +1,8 @@
 &&header
-
 *define
-
 globalon
-
 &&defines
-
 game
-
 *start
-
 &&boot
-
-*compiled_body_start
 &&body
