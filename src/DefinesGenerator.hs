@@ -8,26 +8,84 @@ import qualified Language.PyMO.GameConfig as PyMO
 import Compiler
 import Control.Monad (forM_)
 import Data.List (sort)
+import qualified Data.Text.Encoding as TB
 
 runtimeVariables :: Int
 runtimeVariables = 10
 
-indexed :: [a] -> [(Int, a)]
-indexed = zip [0..]
+-- | runtime vars | local vars | gap | global vars | padding |
+--                |            |     |             |
+--                1            2    3             4
 
-defineVariables :: Compiler ()
+data NSVarLayout = NSVarLayout
+  { nslLocalVarBegin :: Int  -- 1
+  , nslLocalVarEnd :: Int   -- 2
+  , nslGlobalVarBegin :: Int -- 3
+  , nslGlobalVarEnd :: Int  -- 4
+  }
+
+defineVariables :: Compiler NSVarLayout
 defineVariables = do
-  localVars <- genVarsId csLocalVariables runtimeVariables
-  globalVars <- genVarsId csGlobalVariables $ runtimeVariables + length localVars
-  forM_ (localVars ++ globalVars) $ uncurry defineVar
-  return ()
+  lVars <- getVars csLocalVariables
+  gVars <- getVars csGlobalVariables
+  let lVarBegin = runtimeVariables
+      lVarEnd = runtimeVariables + length lVars
+      gVarBegin = max 200 lVarEnd
+      gVarEnd = gVarBegin + length gVars
+      lVars' = zip [lVarBegin .. lVarEnd] $ map TB.text lVars
+      gVars' = zip [gVarBegin .. gVarEnd] $ map TB.text gVars
+  forM_ (lVars' ++ gVars') $ uncurry defineVar
+  return $ NSVarLayout lVarBegin lVarEnd gVarBegin gVarEnd
   where
     defineVar :: Int -> TB.TextBuilder -> Compiler ()
     defineVar varId varName =
       writeDefine $ "numalias " <> varName <> "," <> TB.string (show varId)
-    genVarsId getter startIndex = do
-      vars <- indexed <$> sort <$> fmap snd <$> HM.toList <$> getCompilerState getter
-      return $ map (\(varId, varName) -> (varId + startIndex, TB.text varName)) vars
+    getVars getter =
+      sort <$> fmap snd <$> HM.toList <$> getCompilerState getter
+
+defineComplexHeader :: Int -> Int -> (Int, Int) -> Int -> Compiler ()
+defineComplexHeader v g (sw, sh) l = do
+  writeHeader $
+    ";$V" <> TB.decimal v <>
+    "G" <> TB.decimal g
+    <> "S" <> TB.decimal sw <> "," <> TB.decimal sh <>
+    "L" <> TB.decimal l
+
+defineSimpleHeader :: Maybe Int -> Maybe Int -> Compiler ()
+defineSimpleHeader Nothing Nothing = pure ()
+defineSimpleHeader (Just mode) Nothing = writeHeader $ ";mode" <> TB.decimal mode
+defineSimpleHeader Nothing (Just value) = writeHeader $ ";value" <> TB.decimal value
+defineSimpleHeader (Just mode) (Just value) =
+  writeHeader $ ";mode" <> TB.decimal mode <> ",value" <> TB.decimal value
+
+defineHeader :: NSVarLayout -> Compiler ()
+defineHeader layout = do
+  let v = nslGlobalVarEnd layout
+      g = nslGlobalVarBegin layout
+  s <- PyMO.getInt2Value "imagesize" <$> getCompilerInput ciPyMOGameConfig
+  l <- getCompilerState csLabelCount
+
+  if l < 10000 && v < 4096 then
+    case (s, nslLocalVarEnd layout) of
+      ((320, 240), localVarEnd) | localVarEnd <= 200 ->
+        defineSimpleHeader (Just 320) Nothing
+      ((320, 240), _) ->
+        defineSimpleHeader (Just 320) (Just g)
+      ((400, 300), localVarEnd) | localVarEnd <= 200 ->
+        defineSimpleHeader (Just 400) Nothing
+      ((400, 300), _) ->
+        defineSimpleHeader (Just 400) (Just g)
+      ((640, 480), localVarEnd) | localVarEnd <= 200 ->
+        defineSimpleHeader Nothing Nothing
+      ((640, 480), _) ->
+        defineSimpleHeader Nothing (Just g)
+      ((800, 600), localVarEnd) | localVarEnd <= 200 ->
+        defineSimpleHeader (Just 800) Nothing
+      ((800, 600), _) ->
+        defineSimpleHeader (Just 800) (Just g)
+      _ -> defineComplexHeader v g s l
+  else
+    defineComplexHeader v g s l
 
 -- 注意：旧版ONS中不支持这种Header，需要考虑旧版兼容性，优先使用 mode语法，而不是使用 Header
 -- Header还影响全局变量边界的问题
@@ -45,27 +103,12 @@ defineVariables = do
 ---- | | 本地变量 + 运行时变量 < 200 -> 不生成Header
 ---- | | 本地变量 + 运行时变量 > 200 -> ;采用 ;value 语法
 ---- | 分辨率是800*600
----- | | 本地变量 + 运行时变量 < 200 -> 不生成Header
----- | | 本地变量 + 运行时变量 > 200 -> ;采用 ;$ 语法
+---- | | 本地变量 + 运行时变量 < 200 -> ;mode800
+---- | | 本地变量 + 运行时变量 > 200 -> ;采用 ;value 语法
 ---- | 其他分辨率 -> ;采用 ;$ 语法
 ---- 否则 -> 采用 ;$ 语法
 ---- 记得初始化所有变量
 
-defineHeader :: Compiler ()
-defineHeader = do
-  let getVarsCount = \getter -> HM.size <$> getCompilerState getter
-  localVars <- getVarsCount csLocalVariables
-  globalVars <- getVarsCount csGlobalVariables
-  let v = runtimeVariables + localVars + globalVars
-  let g = runtimeVariables + localVars
-  gameConfig <- getCompilerInput ciPyMOGameConfig
-  let (sw, sh) = PyMO.getInt2Value "imagesize" gameConfig
-  l <- getCompilerState csLabelCount
-  writeHeader $
-    ";$V" <> TB.decimal v <>
-    "G" <> TB.decimal g
-    <> "S" <> TB.decimal sw <> "," <> TB.decimal sh <>
-    "L" <> TB.decimal l
 
 generateDefines :: Compiler ()
-generateDefines = defineVariables >> defineHeader
+generateDefines = defineVariables >>= defineHeader
