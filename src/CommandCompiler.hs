@@ -17,14 +17,16 @@ module CommandCompiler
   , goto
   , ifGoto
   , change
-  , call) where
+  , call
+  , toFullWidthChar
+  , toFullWidthText) where
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Language.PyMO.Script as PyMO
 import qualified TextBuilder as TB
 import Control.Monad (when)
-import Data.Char (isDigit)
+import Data.Char (isDigit, ord, chr)
 import Data.List ((!?), find)
 import Compiler
 
@@ -38,6 +40,20 @@ type AllLabeledBlocks = [LabelBlock]
 type NextLabeledBlocks = [LabelBlock]
 type Command = T.Text
 type CommandHandler a = PyMO.Stmt -> Compiler a
+
+-- | 将字符强制转换为全角字符
+-- 半角ASCII字符 (!-~) 转换为对应的全角字符
+-- 半角空格 (0x20) 转换为全角空格 (0x3000)
+-- 其他字符保持不变
+toFullWidthChar :: Char -> Char
+toFullWidthChar c
+  | c == ' '  = '\x3000'      -- 半角空格转全角空格
+  | c >= '!' && c <= '~' = chr (ord c + 0xFEE0)  -- 半角ASCII转全角
+  | otherwise = c
+
+-- | 将文本中的字符强制转换为全角
+toFullWidthText :: T.Text -> T.Text
+toFullWidthText = T.map toFullWidthChar
 
 getNScrLabel :: ScriptId -> LabelId -> TB.TextBuilder
 getNScrLabel scriptId labelId =
