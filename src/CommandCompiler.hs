@@ -63,7 +63,7 @@ pymoArgFailIfNotExists :: PyMO.Stmt -> Int -> Compiler T.Text
 pymoArgFailIfNotExists stmt index = do
    case PyMO.stmtArgs stmt !? index of
     Just x -> return x
-    Nothing -> failWithStmt stmt $ "无法访问第" ++ show (index + 1) ++ "个参数。"
+    Nothing -> throwWithStmt stmt $ "无法访问第" ++ show (index + 1) ++ "个参数。"
 
 type PyMOArg = T.Text
 
@@ -93,7 +93,7 @@ findGotoNScrLabel scriptId allLabels nextLabels gotoTargetLabel stmt =
       case find isThatLabel allLabels of
         Just (labelId, _, _) -> pure $ getNScrLabel scriptId labelId
         Nothing ->
-          failWithStmt stmt $ "未能找到跳转目标标签 " ++ T.unpack gotoTargetLabel ++ " 。"
+          throwWithStmt stmt $ "未能找到跳转目标标签 " ++ T.unpack gotoTargetLabel ++ " 。"
   where isThatLabel (_, labelName, _) = labelName == gotoTargetLabel
 
 -- 解析PyMO条件表达式
@@ -121,8 +121,8 @@ parseCondition stmt expr = do
           -- 调整运算符：PyMO使用"="，NScripter使用"=="
           let nscrOp = if op == "=" then "==" else TB.string (T.unpack op)
           pure $ nsLeft <> nscrOp <> nsRight
-        _ -> failWithStmt stmt $ "无效的条件表达式: " ++ T.unpack expr
-    Nothing -> failWithStmt stmt $ "无法识别的运算符 in: " ++ T.unpack expr
+        _ -> throwWithStmt stmt $ "无效的条件表达式: " ++ T.unpack expr
+    Nothing -> throwWithStmt stmt $ "无法识别的运算符 in: " ++ T.unpack expr
 
 goto :: ScriptId -> AllLabeledBlocks -> NextLabeledBlocks -> CommandHandler ()
 goto scriptId allLabels nextLabels stmt = do
@@ -140,11 +140,11 @@ ifGoto scriptId allLabels nextLabels stmt = do
     (g:labelWords) | T.toLower g == T.pack "goto" -> do
       let targetLabel = T.unwords labelWords
       when (T.null targetLabel) $
-        failWithStmt stmt $ "if命令缺少目标标签"
+        throwWithStmt stmt $ "if命令缺少目标标签"
       nscrCondition <- parseCondition stmt conditionExpr
       nsLabel <- findGotoNScrLabel scriptId allLabels nextLabels targetLabel stmt
       writeBody $ "if " <> nscrCondition <> " goto " <> nsLabel
-    _ -> failWithStmt stmt $ "if命令缺少'goto'关键字，gotoPart: " ++ T.unpack gotoPart
+    _ -> throwWithStmt stmt $ "if命令缺少'goto'关键字，gotoPart: " ++ T.unpack gotoPart
 
 
 changeTemplate :: TB.TextBuilder -> CommandHandler ReferencedScriptName

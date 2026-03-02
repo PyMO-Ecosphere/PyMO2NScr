@@ -10,7 +10,7 @@ import qualified Data.Text.Encoding as T
 import Main.Utf8 (withUtf8)
 import System.Environment (getArgs)
 import System.FilePath ((</>))
-import Compiler (makeCompilerInput, runCompiler)
+import Compiler (makeCompilerInput, runCompilerExitIfFailed)
 import ScriptCompiler
 
 type Encoding = (String, T.Text -> ByteString)
@@ -58,7 +58,7 @@ printHelp = do
 process :: Arguments -> IO ()
 process args = do
   ci <- makeCompilerInput $ pymoDir args
-  result <- runCompiler ci test
+  result <- runCompilerExitIfFailed ci test
   let outputFile = pymoDir args </> "00.txt"
       (_, encodeFunc) = encoding args
       encoded = encodeFunc result

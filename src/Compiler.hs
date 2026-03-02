@@ -1,37 +1,14 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
-module Compiler
-  ( CompilerInput (ciPyMOGameConfig)
-  , Compiler
-  , ScriptName
-  , ScriptId
-  , makeCompilerInput
-  , csLocalVariables
-  , csGlobalVariables
-  , csRuntimeGlobalVariables
-  , csLabelCount
-  , updateCompilerState
-  , getCompilerInput
-  , getCompilerState
-  , loadPyMOScript
-  , logInfo
-  , warnWithStmt
-  , failWithStmt
-  , runCompiler
-  , isScriptCompiled
-  , markAsCompiled
-  , writeBody
-  , writeDefine
-  , writeBoot
-  , AssetKind(..)
-  , addAsset
-  , pymoVarToNSVar
-  , writeHeader
-  , defineRuntimeGlobalVariables ) where
+module Compiler (module Compiler) where
 
-import Control.Monad.RWS (RWST, MonadIO, runRWST, modify, gets, asks)
+import qualified Control.Monad.Error.Class as E
+import qualified Control.Monad.Except as E
 import qualified Control.Monad.RWS as RWS
 import qualified TextBuilder as TB
 import qualified Language.PyMO.GameConfig as PyMO
@@ -40,11 +17,11 @@ import qualified Data.Text as T
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified Data.Text.Encoding as T
-import GHC.Generics
+import GHC.Generics (Generic)
 import Data.FileEmbed (embedFile)
 import System.FilePath ((</>))
-import System.Exit (exitFailure)
 import Data.Hashable (Hashable)
+import System.Exit (exitFailure)
 
 -- Compiler Input
 data CompilerInput = CompilerInput
@@ -57,7 +34,7 @@ makeCompilerInput gameDir = do
   return $ CompilerInput gameConfig gameDir
 
 getCompilerInput :: (CompilerInput -> a) -> Compiler a
-getCompilerInput = Compiler . asks
+getCompilerInput = Compiler . RWS.asks
 
 -- Compiler State
 type PyMOVarName = T.Text
@@ -83,10 +60,10 @@ emptyCompilerState = CompilerState
   , csLabelCount = 10 }
 
 updateCompilerState :: (CompilerState -> CompilerState) -> Compiler ()
-updateCompilerState = Compiler . modify
+updateCompilerState = Compiler . RWS.modify
 
 getCompilerState :: (CompilerState -> a) -> Compiler a
-getCompilerState = Compiler . gets
+getCompilerState = Compiler . RWS.gets
 
 defineRuntimeGlobalVariables :: T.Text -> Compiler ()
 defineRuntimeGlobalVariables nscrVarName =
@@ -213,8 +190,11 @@ writeBody :: Hole -> Compiler ()
 writeBody hole = writeCompilerOutput mempty { coBody = hole <> newline }
 
 -- Compiler
+
+type CompilerError = (Maybe PyMO.Stmt, String)
+
 newtype Compiler x =
-  Compiler (RWST CompilerInput CompilerOutput CompilerState IO x)
+  Compiler (RWS.RWST CompilerInput CompilerOutput CompilerState (E.ExceptT CompilerError IO) x)
 
 instance Functor Compiler where
   fmap f (Compiler rwst) = Compiler (fmap f rwst)
@@ -227,13 +207,12 @@ instance Monad Compiler where
   return = pure
   Compiler m >>= f = Compiler (m >>= (\x -> let Compiler r = f x in r))
 
-instance MonadIO Compiler where
+instance RWS.MonadIO Compiler where
   liftIO = Compiler . RWS.liftIO
 
-instance MonadFail Compiler where
-  fail x = RWS.liftIO $ do
-    putStr $ "\n编译失败:\n\n" ++ x ++ "\n\n"
-    exitFailure
+instance E.MonadError CompilerError Compiler where
+  throwError e = Compiler (RWS.lift (E.throwError e))
+  catchError (Compiler m) handler = Compiler $ E.catchError m (\e -> let Compiler r = handler e in r)
 
 logInfo :: String -> Compiler ()
 logInfo = RWS.liftIO . putStrLn
@@ -248,14 +227,15 @@ warnWithStmt :: PyMO.Stmt -> String -> Compiler ()
 warnWithStmt stmt msg =
   logInfo $ "【警告】" ++ stmtMsg stmt ++ msg
 
-failWithStmt :: PyMO.Stmt -> String -> Compiler a
-failWithStmt stmt msg = fail $
-  stmtMsg stmt ++ "\n\n\t" ++ msg
+throwWithStmt :: PyMO.Stmt -> String -> Compiler a
+throwWithStmt stmt msg = E.throwError ((Just stmt), msg)
 
-runCompiler :: CompilerInput -> Compiler () -> IO T.Text
+runCompiler :: CompilerInput -> Compiler () -> IO (Either CompilerError T.Text)
 runCompiler ci (Compiler compiler) = do
-  ((), _, co) <- runRWST compiler ci emptyCompilerState
-  T.unlines <$> (mapM (applyHole co) nscrTemplate)
+  result <- E.runExceptT $ RWS.runRWST compiler ci emptyCompilerState
+  case result of
+    Left x -> return $ Left x
+    Right ((), _, co) -> Right . T.unlines <$> (mapM (applyHole co) nscrTemplate)
   where
     nscrTemplate = T.lines $ T.decodeUtf8 $(embedFile "./src/nscr-template.txt")
     holeMapping =
@@ -270,3 +250,21 @@ runCompiler ci (Compiler compiler) = do
           case lookup holeName holeMapping of
             Nothing -> fail $ "UNKNOWN HOLE: "++ T.unpack holeName
             Just holeGetter -> return $ TB.toText $ holeGetter co
+
+
+runCompilerExitIfFailed :: CompilerInput -> Compiler () -> IO T.Text
+runCompilerExitIfFailed c compiler = do
+  result <- runCompiler c compiler
+  case result of
+    Right x -> return x
+    Left (stmt, msg) -> do
+      putStrLn ""
+      putStrLn "== 编译失败 =="
+      putStrLn ""
+      case stmt of
+        Nothing -> return ()
+        Just stmt' -> putStrLn $ stmtMsg stmt'
+      putStrLn $ "\t" ++ msg
+      putStrLn ""
+      putStrLn ""
+      exitFailure

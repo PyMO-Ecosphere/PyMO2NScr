@@ -8,7 +8,7 @@ import qualified TextBuilder as TB
 import qualified Data.Text as T
 import qualified Language.PyMO.GameConfig as PyMO
 import Compiler
-import Control.Monad (forM_, unless)
+import Control.Monad (forM_)
 import Data.List (sort)
 
 runtimeVariables :: Int
@@ -28,6 +28,7 @@ defineVariables :: Compiler NSVarLayout
 defineVariables = do
   lVars <- getVars csLocalVariables
   gVarsPyMO <- getVars csGlobalVariables
+  generateBootInitialization lVars gVarsPyMO
   gVarsRuntime <- HS.toList <$> getCompilerState csRuntimeGlobalVariables
   let gVars = gVarsRuntime ++ gVarsPyMO
   let lVarBegin = runtimeVariables
@@ -37,7 +38,6 @@ defineVariables = do
       lVars' = zip [lVarBegin .. lVarEnd] $ map TB.text lVars
       gVars' = zip [gVarBegin .. gVarEnd] $ map TB.text gVars
   forM_ (lVars' ++ gVars') $ uncurry defineVar
-  generateBootInitialization lVars gVarsPyMO
   return $ NSVarLayout lVarEnd gVarBegin gVarEnd
   where
     defineVar :: Int -> TB.TextBuilder -> Compiler ()
@@ -48,18 +48,12 @@ defineVariables = do
 
     generateBootInitialization :: [T.Text] -> [T.Text] -> Compiler ()
     generateBootInitialization localVars globalPyMOVars = do
-      -- 初始化所有本地数字变量
-      unless (null localVars) $ do
-        writeBoot "; 初始化本地PyMO变量"
-        forM_ localVars $ \varName ->
-          writeBoot $ "mov %" <> TB.text varName <> ",0"
-
-      -- 检查RTG_INIT，如果未设置则初始化全局PyMO变量
+      defineRuntimeGlobalVariables "RTG_INIT"
+      forM_ localVars $ \varName ->
+        writeBoot $ "mov %" <> TB.text varName <> ",0"
       writeBoot "if $RTG_INIT=\"OK\" goto *skip_global_init"
-      unless (null globalPyMOVars) $ do
-        writeBoot "; 初始化全局PyMO变量"
-        forM_ globalPyMOVars $ \varName ->
-          writeBoot $ "mov %" <> TB.text varName <> ",0"
+      forM_ globalPyMOVars $ \varName ->
+        writeBoot $ "mov %" <> TB.text varName <> ",0"
       writeBoot "mov $RTG_INIT,\"OK\""
       writeBoot "*skip_global_init"
 
@@ -77,6 +71,29 @@ defineSimpleHeader (Just mode) Nothing = writeHeader $ ";mode" <> TB.decimal mod
 defineSimpleHeader Nothing (Just value) = writeHeader $ ";value" <> TB.decimal value
 defineSimpleHeader (Just mode) (Just value) =
   writeHeader $ ";mode" <> TB.decimal mode <> ",value" <> TB.decimal value
+
+
+-- 注意：旧版ONS中不支持这种Header，需要考虑旧版兼容性，优先使用 mode语法，而不是使用 Header
+-- Header还影响全局变量边界的问题
+-- 应该先生成变量并返回变量生成报告，再根据变量生成报告生成 Header
+--
+-- Header 决策模式
+---- Label数少于10000个且最大变量编号小于4095
+---- | 分辨率是320*240
+---- | | 本地变量 + 运行时变量 < 200 -> ;mode320
+---- | | 本地变量 + 运行时变量 > 200 -> ;mode320,value语法
+---- | 分辨率是400*300
+---- | | 本地变量 + 运行时变量 < 200 -> ;mode400
+---- | | 本地变量 + 运行时变量 > 200 -> ;mode400,value语法
+---- | 分辨率是640*480
+---- | | 本地变量 + 运行时变量 < 200 -> 不生成Header
+---- | | 本地变量 + 运行时变量 > 200 -> ;采用 ;value 语法
+---- | 分辨率是800*600
+---- | | 本地变量 + 运行时变量 < 200 -> ;mode800
+---- | | 本地变量 + 运行时变量 > 200 -> ;采用 ;value 语法
+---- | 其他分辨率 -> ;采用 ;$ 语法
+---- 否则 -> 采用 ;$ 语法
+---- 记得初始化所有变量
 
 defineHeader :: NSVarLayout -> Compiler ()
 defineHeader layout = do
@@ -107,31 +124,7 @@ defineHeader layout = do
   else
     defineComplexHeader v g s l
 
--- 注意：旧版ONS中不支持这种Header，需要考虑旧版兼容性，优先使用 mode语法，而不是使用 Header
--- Header还影响全局变量边界的问题
--- 应该先生成变量并返回变量生成报告，再根据变量生成报告生成 Header
---
--- Header 决策模式
----- Label数少于10000个且最大变量编号小于4095
----- | 分辨率是320*240
----- | | 本地变量 + 运行时变量 < 200 -> ;mode320
----- | | 本地变量 + 运行时变量 > 200 -> ;mode320,value语法
----- | 分辨率是400*300
----- | | 本地变量 + 运行时变量 < 200 -> ;mode400
----- | | 本地变量 + 运行时变量 > 200 -> ;mode400,value语法
----- | 分辨率是640*480
----- | | 本地变量 + 运行时变量 < 200 -> 不生成Header
----- | | 本地变量 + 运行时变量 > 200 -> ;采用 ;value 语法
----- | 分辨率是800*600
----- | | 本地变量 + 运行时变量 < 200 -> ;mode800
----- | | 本地变量 + 运行时变量 > 200 -> ;采用 ;value 语法
----- | 其他分辨率 -> ;采用 ;$ 语法
----- 否则 -> 采用 ;$ 语法
----- 记得初始化所有变量
-
-
 generateDefines :: Compiler ()
 generateDefines = do
-  defineRuntimeGlobalVariables "RTG_INIT"
   varLayout <- defineVariables
   defineHeader varLayout
