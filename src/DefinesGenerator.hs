@@ -3,12 +3,12 @@
 module DefinesGenerator ( generateDefines ) where
 
 import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
 import qualified TextBuilder as TB
 import qualified Language.PyMO.GameConfig as PyMO
 import Compiler
 import Control.Monad (forM_)
 import Data.List (sort)
-import qualified Data.Text.Encoding as TB
 
 runtimeVariables :: Int
 runtimeVariables = 10
@@ -18,8 +18,7 @@ runtimeVariables = 10
 --                1            2    3             4
 
 data NSVarLayout = NSVarLayout
-  { nslLocalVarBegin :: Int  -- 1
-  , nslLocalVarEnd :: Int   -- 2
+  { nslLocalVarEnd :: Int   -- 2
   , nslGlobalVarBegin :: Int -- 3
   , nslGlobalVarEnd :: Int  -- 4
   }
@@ -27,7 +26,9 @@ data NSVarLayout = NSVarLayout
 defineVariables :: Compiler NSVarLayout
 defineVariables = do
   lVars <- getVars csLocalVariables
-  gVars <- getVars csGlobalVariables
+  gVarsPyMO <- getVars csGlobalVariables
+  gVarsRuntime <- HS.toList <$> getCompilerState csRuntimeGlobalVariables
+  let gVars = gVarsRuntime ++ gVarsPyMO
   let lVarBegin = runtimeVariables
       lVarEnd = runtimeVariables + length lVars
       gVarBegin = max 200 lVarEnd
@@ -35,7 +36,7 @@ defineVariables = do
       lVars' = zip [lVarBegin .. lVarEnd] $ map TB.text lVars
       gVars' = zip [gVarBegin .. gVarEnd] $ map TB.text gVars
   forM_ (lVars' ++ gVars') $ uncurry defineVar
-  return $ NSVarLayout lVarBegin lVarEnd gVarBegin gVarEnd
+  return $ NSVarLayout lVarEnd gVarBegin gVarEnd
   where
     defineVar :: Int -> TB.TextBuilder -> Compiler ()
     defineVar varId varName =
@@ -111,4 +112,7 @@ defineHeader layout = do
 
 
 generateDefines :: Compiler ()
-generateDefines = defineVariables >>= defineHeader
+generateDefines = do
+  defineRuntimeGlobalVariables "RTG_INIT"
+  varLayout <- defineVariables
+  defineHeader varLayout

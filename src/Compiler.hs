@@ -10,6 +10,7 @@ module Compiler
   , makeCompilerInput
   , csLocalVariables
   , csGlobalVariables
+  , csRuntimeGlobalVariables
   , csLabelCount
   , updateCompilerState
   , getCompilerInput
@@ -26,7 +27,8 @@ module Compiler
   , AssetKind(..)
   , addAsset
   , pymoVarToNSVar
-  , writeHeader ) where
+  , writeHeader
+  , defineRuntimeGlobalVariables ) where
 
 import Control.Monad.RWS (RWST, MonadIO, runRWST, modify, gets, asks)
 import qualified Control.Monad.RWS as RWS
@@ -65,6 +67,7 @@ type ScriptId = Int
 data CompilerState = CompilerState
   { csLocalVariables :: HM.HashMap PyMOVarName T.Text
   , csGlobalVariables :: HM.HashMap PyMOVarName T.Text
+  , csRuntimeGlobalVariables :: HS.HashSet T.Text
   , csLoadedScripts :: HM.HashMap ScriptName (ScriptId, PyMO.Script)
   , csCompiledScripts :: HS.HashSet ScriptName
   , csLabelCount :: Int }
@@ -73,6 +76,7 @@ emptyCompilerState :: CompilerState
 emptyCompilerState = CompilerState
   { csLocalVariables = mempty
   , csGlobalVariables = mempty
+  , csRuntimeGlobalVariables = mempty
   , csLoadedScripts = mempty
   , csCompiledScripts = mempty
   , csLabelCount = 10 }
@@ -82,6 +86,11 @@ updateCompilerState = Compiler . modify
 
 getCompilerState :: (CompilerState -> a) -> Compiler a
 getCompilerState = Compiler . gets
+
+defineRuntimeGlobalVariables :: T.Text -> Compiler ()
+defineRuntimeGlobalVariables nscrVarName =
+  updateCompilerState $ \x ->
+    x { csRuntimeGlobalVariables = HS.insert nscrVarName $ csRuntimeGlobalVariables x}
 
 pymoVarToNSVar :: PyMOVarName -> Compiler NScrVarName
 pymoVarToNSVar pymoVarName = do
@@ -94,7 +103,7 @@ pymoVarToNSVar pymoVarName = do
   case HM.lookup pymoVarName varSet of
     Just x -> return $ TB.text x
     Nothing -> do
-      let nscrVarNamePrefix = if isGlobalVar then "PYMO_G_" else "PYMO_L_"
+      let nscrVarNamePrefix = if isGlobalVar then "PYMOG_" else "PYMOL_"
       let nscrVarName = nscrVarNamePrefix <> T.pack (show (HM.size varSet))
       updateCompilerState $ \x ->
         if isGlobalVar
@@ -168,6 +177,8 @@ type Hole = TB.TextBuilder
 data CompilerOutput = CompilerOutput
   { coHeader :: Hole
   , coDefines :: Hole
+  , coInitPyMOLocalVars :: Hole
+  , coInitPyMOGlobalVars :: Hole
   , coBody :: Hole
   , coAssets :: HM.HashMap AssetKey Asset }
 
@@ -175,11 +186,13 @@ instance Semigroup CompilerOutput where
   a <> b = CompilerOutput
     { coHeader = coHeader a <> coHeader b
     , coDefines = coDefines a <> coDefines b
+    , coInitPyMOLocalVars = coInitPyMOLocalVars a <> coInitPyMOLocalVars b
+    , coInitPyMOGlobalVars = coInitPyMOGlobalVars a <> coInitPyMOGlobalVars b
     , coBody = coBody a <> coBody b
     , coAssets = coAssets a <> coAssets b }
 
 instance Monoid CompilerOutput where
-  mempty = CompilerOutput mempty mempty mempty mempty
+  mempty = CompilerOutput mempty mempty mempty mempty mempty mempty
   mappend = (<>)
 
 writeCompilerOutput :: CompilerOutput -> Compiler ()
@@ -244,9 +257,11 @@ runCompiler ci (Compiler compiler) = do
   where
     nscrTemplate = T.lines $ T.decodeUtf8 $(embedFile "./src/nscr-template.txt")
     holeMapping =
-      [ (T.pack "header", coHeader)
-      , (T.pack "defines", coDefines)
-      , (T.pack "body", coBody) ]
+      [ ("header", coHeader)
+      , ("defines", coDefines)
+      , ("initPyMOLocalVars", coInitPyMOLocalVars)
+      , ("initPyMOGlobalVars", coInitPyMOGlobalVars)
+      , ("body", coBody) ]
     applyHole co line =
       case T.stripPrefix "&&" line of
         Nothing -> return line
