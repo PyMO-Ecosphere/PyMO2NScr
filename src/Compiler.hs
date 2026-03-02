@@ -24,6 +24,7 @@ module Compiler
   , markAsCompiled
   , writeBody
   , writeDefine
+  , writeBoot
   , AssetKind(..)
   , addAsset
   , pymoVarToNSVar
@@ -177,8 +178,7 @@ type Hole = TB.TextBuilder
 data CompilerOutput = CompilerOutput
   { coHeader :: Hole
   , coDefines :: Hole
-  , coInitPyMOLocalVars :: Hole
-  , coInitPyMOGlobalVars :: Hole
+  , coBoot :: Hole
   , coBody :: Hole
   , coAssets :: HM.HashMap AssetKey Asset }
 
@@ -186,13 +186,12 @@ instance Semigroup CompilerOutput where
   a <> b = CompilerOutput
     { coHeader = coHeader a <> coHeader b
     , coDefines = coDefines a <> coDefines b
-    , coInitPyMOLocalVars = coInitPyMOLocalVars a <> coInitPyMOLocalVars b
-    , coInitPyMOGlobalVars = coInitPyMOGlobalVars a <> coInitPyMOGlobalVars b
+    , coBoot = coBoot a <> coBoot b
     , coBody = coBody a <> coBody b
     , coAssets = coAssets a <> coAssets b }
 
 instance Monoid CompilerOutput where
-  mempty = CompilerOutput mempty mempty mempty mempty mempty mempty
+  mempty = CompilerOutput mempty mempty mempty mempty mempty
   mappend = (<>)
 
 writeCompilerOutput :: CompilerOutput -> Compiler ()
@@ -206,6 +205,9 @@ writeHeader hole = writeCompilerOutput mempty { coHeader = hole }
 
 writeDefine :: Hole -> Compiler ()
 writeDefine hole = writeCompilerOutput mempty { coDefines = hole <> newline }
+
+writeBoot :: Hole -> Compiler ()
+writeBoot hole = writeCompilerOutput mempty { coBoot = hole <> newline }
 
 writeBody :: Hole -> Compiler ()
 writeBody hole = writeCompilerOutput mempty { coBody = hole <> newline }
@@ -259,8 +261,7 @@ runCompiler ci (Compiler compiler) = do
     holeMapping =
       [ ("header", coHeader)
       , ("defines", coDefines)
-      , ("initPyMOLocalVars", coInitPyMOLocalVars)
-      , ("initPyMOGlobalVars", coInitPyMOGlobalVars)
+      , ("boot", coBoot)
       , ("body", coBody) ]
     applyHole co line =
       case T.stripPrefix "&&" line of

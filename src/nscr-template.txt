@@ -10,14 +10,7 @@ game
 
 *start
 
-; 初始化本地变量
-&&initPyMOLocalVars
-
-if $RTG_INIT="INITED" goto *compiled_body_start
-
-; 初始化全局变量，这个洞只初始化PYMO全局变量
-&&initPyMOGlobalVars
-mov $RTG_INIT,"INITED"
+&&boot
 
 *compiled_body_start
 &&body
