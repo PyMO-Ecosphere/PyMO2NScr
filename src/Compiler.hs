@@ -265,7 +265,9 @@ runCompilerExitIfFailed c compiler = do
       putStrLn ""
       case stmt of
         Nothing -> return ()
-        Just stmt' -> putStrLn $ stmtMsg stmt'
+        Just stmt' -> do
+          putStrLn $ stmtMsg stmt'
+          putStrLn ""
       putStrLn $ "\t" ++ msg
       putStrLn ""
       putStrLn ""

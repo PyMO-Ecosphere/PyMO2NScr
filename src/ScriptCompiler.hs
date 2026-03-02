@@ -11,13 +11,16 @@ import Control.Monad (forM, forM_)
 import Data.Maybe (catMaybes)
 import DefinesGenerator
 import Control.Monad.Error.Class (MonadError(catchError))
+import CommandCompiler (invalidArg)
 
 collectBlockUntilNextLabel ::
   [PyMO.Stmt] -> Compiler ([PyMO.Stmt], Maybe (CC.LabelName, [PyMO.Stmt]))
 collectBlockUntilNextLabel [] = return ([], Nothing)
 collectBlockUntilNextLabel (x : xs)
   | PyMO.stmtCommand x == "label" =
-      (CC.pymoArg x 0 >>= \labelName -> return ([], Just (labelName, xs)))
+    case PyMO.stmtArgs x of
+      [labelName] -> return ([], Just (labelName, xs))
+      _ -> invalidArg x
   | otherwise = do
     (xs', nextLabelName) <- collectBlockUntilNextLabel xs
     return (x : xs', nextLabelName)
@@ -40,12 +43,14 @@ compileCommand ::
   Compiler (Maybe CC.ReferencedScriptName)
 compileCommand scriptId allLabeledBlocks nextLabeledBlocks stmt =
   case PyMO.stmtCommand stmt of
-    "goto" ->
-      CC.goto scriptId allLabeledBlocks nextLabeledBlocks stmt >> pure Nothing
-    "if" ->
-      CC.ifGoto scriptId allLabeledBlocks nextLabeledBlocks stmt >> pure Nothing
-    "change" -> Just <$> CC.change stmt
-    "call" -> Just <$> CC.call stmt
+    "goto" -> do
+      CC.goto scriptId allLabeledBlocks nextLabeledBlocks stmt (PyMO.stmtArgs stmt)
+      pure Nothing
+    "if" -> do
+      CC.ifGoto scriptId allLabeledBlocks nextLabeledBlocks stmt (PyMO.stmtArgs stmt)
+      pure Nothing
+    "change" -> Just <$> CC.change stmt (PyMO.stmtArgs stmt)
+    "call" -> Just <$> CC.call stmt (PyMO.stmtArgs stmt)
     trivialCommand ->
       case HM.lookup trivialCommand CC.trivialCommands of
         Nothing -> do

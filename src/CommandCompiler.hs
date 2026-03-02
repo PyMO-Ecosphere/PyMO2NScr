@@ -12,7 +12,7 @@ module CommandCompiler
   , CommandHandler
   , getNScrLabel
   , trivialCommands
-  , pymoArg
+  , invalidArg
   , goto
   , ifGoto
   , change
@@ -26,7 +26,7 @@ import qualified Language.PyMO.Script as PyMO
 import qualified TextBuilder as TB
 import Control.Monad (when)
 import Data.Char (isDigit, ord, chr)
-import Data.List ((!?), find)
+import Data.List (find)
 import Compiler
 
 -- utils
@@ -38,8 +38,8 @@ type LabelId = Int
 type AllLabeledBlocks = [LabelBlock]
 type NextLabeledBlocks = [LabelBlock]
 type Command = T.Text
-type CommandHandler a = PyMO.Stmt -> Compiler a
-type TrivialCommandHandler = PyMO.Stmt -> [PyMOArg] -> Compiler ()
+type PyMOArg = T.Text
+type CommandHandler a = PyMO.Stmt -> [PyMOArg] -> Compiler a
 
 -- | 将字符强制转换为全角字符
 -- 半角ASCII字符 (!-~) 转换为对应的全角字符
@@ -59,13 +59,12 @@ getNScrLabel :: ScriptId -> LabelId -> TB.TextBuilder
 getNScrLabel scriptId labelId =
   "*PYMO_" <> TB.decimal scriptId <> "_" <> TB.decimal labelId
 
-type PyMOArg = T.Text
-
-pymoArg :: PyMO.Stmt -> Int -> Compiler PyMOArg
-pymoArg stmt index = do
-   case PyMO.stmtArgs stmt !? index of
-    Just x -> return x
-    Nothing -> throwWithStmt stmt $ "无法访问第" ++ show (index + 1) ++ "个参数。"
+invalidArg :: PyMO.Stmt -> Compiler a
+invalidArg stmt =
+  throwWithStmt stmt $
+    "无法为命令" ++
+    T.unpack (PyMO.stmtCommand stmt) ++
+    "匹配" ++ show (length $ PyMO.stmtArgs stmt)  ++ "个参数。"
 
 -- non-trivial commands
 
@@ -115,15 +114,13 @@ parseCondition stmt expr = do
     Nothing -> throwWithStmt stmt $ "无法识别的运算符 in: " ++ T.unpack expr
 
 goto :: ScriptId -> AllLabeledBlocks -> NextLabeledBlocks -> CommandHandler ()
-goto scriptId allLabels nextLabels stmt = do
-  label <- pymoArg stmt 0
+goto scriptId allLabels nextLabels stmt [label] = do
   nsLabel <- findGotoNScrLabel scriptId allLabels nextLabels label stmt
   writeBody $ "goto " <> nsLabel
+goto _ _ _ stmt _ = invalidArg stmt
 
 ifGoto :: ScriptId -> AllLabeledBlocks -> NextLabeledBlocks -> CommandHandler ()
-ifGoto scriptId allLabels nextLabels stmt = do
-  condition <- pymoArg stmt 0
-  gotoPart <- pymoArg stmt 1
+ifGoto scriptId allLabels nextLabels stmt [condition, gotoPart] = do
   let conditionExpr = T.strip condition
   let gotoParts = T.words (T.strip gotoPart)
   case gotoParts of
@@ -135,13 +132,14 @@ ifGoto scriptId allLabels nextLabels stmt = do
       nsLabel <- findGotoNScrLabel scriptId allLabels nextLabels targetLabel stmt
       writeBody $ "if " <> nscrCondition <> " goto " <> nsLabel
     _ -> throwWithStmt stmt $ "if命令缺少'goto'关键字，gotoPart: " ++ T.unpack gotoPart
+ifGoto _ _ _ stmt _ = invalidArg stmt
 
 changeTemplate :: TB.TextBuilder -> CommandHandler ReferencedScriptName
-changeTemplate nsCmd stmt = do
-  targetScriptName <- pymoArg stmt 0
+changeTemplate nsCmd _ [targetScriptName] = do
   (scrId, _) <- loadPyMOScript targetScriptName
   writeBody $ nsCmd <> " " <> getNScrLabel scrId 0
   return targetScriptName
+changeTemplate _ stmt _ = invalidArg stmt
 
 change :: CommandHandler ReferencedScriptName
 change = changeTemplate "goto"
@@ -151,6 +149,6 @@ call = changeTemplate "gosub"
 
 -- trivial commands
 
-trivialCommands :: HM.HashMap Command TrivialCommandHandler
+trivialCommands :: HM.HashMap Command (CommandHandler ())
 trivialCommands = HM.fromList
   []
