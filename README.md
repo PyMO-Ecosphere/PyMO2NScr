@@ -4,8 +4,8 @@
 
 ## TODO
 
-- [ ] 输出 defines
-- [ ] 输出 header
+- [x] 输出 defines
+- [x] 输出 header
 - [ ] 完善所有 Command Handler
 - [ ] 输出 nscript.dat
 - [ ] 构建 arc.nsa
