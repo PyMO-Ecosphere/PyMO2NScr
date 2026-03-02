@@ -27,6 +27,13 @@ defaultGbkEncoding = ("gbk", E.encodeStrictByteString E.GB18030 . T.unpack)
 parseArgs :: [String] -> Maybe Arguments
 parseArgs [] = Nothing
 parseArgs (pymoDir' : []) = Just $ Arguments pymoDir' (defaultGbkEncoding) Nothing
+parseArgs (pymoDir' : "--encoding" : encoding' : []) = do
+  encoding'' <- case encoding' of
+    "gbk" -> Just defaultGbkEncoding
+    "utf8" -> Just ("utf8", T.encodeUtf8)
+    "sjis" -> Just ("sjis", E.encodeStrictByteString E.ShiftJIS . T.unpack)
+    _ -> Nothing
+  return $ (flip $ Arguments pymoDir') Nothing encoding''
 parseArgs (pymoDir' : outputDir' : []) =
   Just $ Arguments pymoDir' defaultGbkEncoding (Just outputDir')
 parseArgs (pymoDir' : outputDir' : "--encoding" : encoding' : []) = do
