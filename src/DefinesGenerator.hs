@@ -5,9 +5,10 @@ module DefinesGenerator ( generateDefines ) where
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified TextBuilder as TB
+import qualified Data.Text as T
 import qualified Language.PyMO.GameConfig as PyMO
 import Compiler
-import Control.Monad (forM_)
+import Control.Monad (forM_, unless)
 import Data.List (sort)
 
 runtimeVariables :: Int
@@ -36,6 +37,7 @@ defineVariables = do
       lVars' = zip [lVarBegin .. lVarEnd] $ map TB.text lVars
       gVars' = zip [gVarBegin .. gVarEnd] $ map TB.text gVars
   forM_ (lVars' ++ gVars') $ uncurry defineVar
+  generateBootInitialization lVars gVarsPyMO
   return $ NSVarLayout lVarEnd gVarBegin gVarEnd
   where
     defineVar :: Int -> TB.TextBuilder -> Compiler ()
@@ -43,6 +45,23 @@ defineVariables = do
       writeDefine $ "numalias " <> varName <> "," <> TB.string (show varId)
     getVars getter =
       sort <$> fmap snd <$> HM.toList <$> getCompilerState getter
+
+    generateBootInitialization :: [T.Text] -> [T.Text] -> Compiler ()
+    generateBootInitialization localVars globalPyMOVars = do
+      -- 初始化所有本地数字变量
+      unless (null localVars) $ do
+        writeBoot "; 初始化本地PyMO变量"
+        forM_ localVars $ \varName ->
+          writeBoot $ "mov %" <> TB.text varName <> ",0"
+
+      -- 检查RTG_INIT，如果未设置则初始化全局PyMO变量
+      writeBoot "if $RTG_INIT=\"OK\" goto *skip_global_init"
+      unless (null globalPyMOVars) $ do
+        writeBoot "; 初始化全局PyMO变量"
+        forM_ globalPyMOVars $ \varName ->
+          writeBoot $ "mov %" <> TB.text varName <> ",0"
+      writeBoot "mov $RTG_INIT,\"OK\""
+      writeBoot "*skip_global_init"
 
 defineComplexHeader :: Int -> Int -> (Int, Int) -> Int -> Compiler ()
 defineComplexHeader v g (sw, sh) l = do
