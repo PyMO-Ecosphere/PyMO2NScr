@@ -52,7 +52,7 @@ compileCommand scriptId allLabeledBlocks nextLabeledBlocks stmt =
           warnWithStmt stmt $ "无法处理命令 " ++ (T.unpack $ PyMO.stmtCommand stmt) ++ " ，忽略该命令。"
           return Nothing
         Just x -> do
-          catchError (x stmt) $ \(stmt', msg) ->
+          catchError (x stmt (PyMO.stmtArgs stmt)) $ \(stmt', msg) ->
             case stmt' of
               Nothing -> warn msg
               Just stmt'' -> warnWithStmt stmt'' msg

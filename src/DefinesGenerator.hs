@@ -72,7 +72,6 @@ defineSimpleHeader Nothing (Just value) = writeHeader $ ";value" <> TB.decimal v
 defineSimpleHeader (Just mode) (Just value) =
   writeHeader $ ";mode" <> TB.decimal mode <> ",value" <> TB.decimal value
 
-
 -- 注意：旧版ONS中不支持这种Header，需要考虑旧版兼容性，优先使用 mode语法，而不是使用 Header
 -- Header还影响全局变量边界的问题
 -- 应该先生成变量并返回变量生成报告，再根据变量生成报告生成 Header
