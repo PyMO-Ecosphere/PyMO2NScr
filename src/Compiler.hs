@@ -124,10 +124,12 @@ newtype AssetKey = AssetKey (AD.AssetKind, AD.AssetNameLowered)
 
 instance Hashable AssetKey
 
-addAsset :: PyMO.Stmt -> AD.AssetKind -> AD.AssetName -> Compiler ()
+type AssetName = T.Text
+
+addAsset :: PyMO.Stmt -> AD.AssetKind -> AssetName -> Compiler ()
 addAsset stmt assetKind' assetName' = do
   ad <- getCompilerInput ciAssetDatabase
-  asset <- liftIO $ AD.getAssetRef ad assetKind' assetName'
+  asset <- liftIO $ AD.getAssetRef ad assetKind' $ T.unpack assetName'
 
   case asset of
     Nothing ->
