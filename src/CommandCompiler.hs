@@ -28,6 +28,7 @@ import Control.Monad (when, forM_)
 import Data.Char (isDigit, ord, chr)
 import Data.List (find)
 import Compiler
+import qualified Language.PyMO.AssetDatabase as AD
 import qualified Language.PyMO.GameConfig as PyMO
 
 -- utils
@@ -214,18 +215,22 @@ waitSe stmt _ = invalidArg stmt
 
 bgm :: CommandHandler ()
 bgm stmt [filename] = do
+  addAsset stmt AD.Bgm filename
   path <- getAssetPath "bgm" filename
   writeBody $ "bgm " <> path
 bgm stmt [filename, isloop] = do
+  addAsset stmt AD.Bgm filename
   path <- getAssetPath "bgm" filename
   writeBody $ "bgm " <> path <> "," <> TB.text isloop
 bgm stmt _ = invalidArg stmt
 
 se :: CommandHandler ()
 se stmt [filename] = do
+  addAsset stmt AD.Se filename
   path <- getAssetPath "se" filename
   writeBody $ "dwave 1," <> path
 se stmt [filename, isloop] = do
+  addAsset stmt AD.Se filename
   path <- getAssetPath "se" filename
   if isloop == "1"
     then writeBody $ "dwaveloop 1," <> path
@@ -234,12 +239,15 @@ se stmt _ = invalidArg stmt
 
 vo :: CommandHandler ()
 vo stmt [filename] = do
+  addAsset stmt AD.Voice filename
   path <- getAssetPath "voice" filename
   writeBody $ "dwave 2," <> path
 vo stmt _ = invalidArg stmt
 
 movie :: CommandHandler ()
-movie stmt [filename] = writeBody $ "movie " <> TB.text filename
+movie stmt [filename] = do
+  addAsset stmt AD.Video filename
+  writeBody $ "movie " <> TB.text filename
 movie stmt _ = invalidArg stmt
 
 config :: CommandHandler ()
@@ -263,6 +271,7 @@ load stmt _ = invalidArg stmt
 date :: CommandHandler ()
 date stmt [dateBg, x, y, color] = do
   -- 简单实现：显示日期背景，实际日期显示需要更复杂的处理
+  addAsset stmt AD.Bg dateBg
   path <- getAssetPath "bg" dateBg
   writeBody $ "print " <> path <> "," <> TB.text x <> "," <> TB.text y <> "," <> TB.text color <> ",\"日期显示功能待完善\""
 date stmt _ = invalidArg stmt
@@ -329,18 +338,22 @@ textbox stmt _ = invalidArg stmt
 bg :: CommandHandler ()
 bg stmt args = case args of
   [filename] -> do
+    addAsset stmt AD.Bg filename
     path <- getAssetPath "bg" filename
     writeBody $ "bg " <> path
   [filename, transition, time] -> do
+    addAsset stmt AD.Bg filename
     path <- getAssetPath "bg" filename
     writeBody $ "bg " <> path <> "," <> TB.text transition <> "," <> TB.text time
   [filename, transition, time, x, y] -> do
+    addAsset stmt AD.Bg filename
     path <- getAssetPath "bg" filename
     writeBody $ "bg " <> path <> "," <> TB.text transition <> "," <> TB.text time <> "," <> TB.text x <> "," <> TB.text y
   _ -> invalidArg stmt
 
 scroll :: CommandHandler ()
 scroll stmt [filename, startx, starty, endx, endy, time] = do
+  addAsset stmt AD.Bg filename
   path <- getAssetPath "bg" filename
   writeBody $ "scroll " <> path <> "," <> TB.text startx <> "," <> TB.text starty <> "," <> TB.text endx <> "," <> TB.text endy <> "," <> TB.text time
 scroll stmt _ = invalidArg stmt
@@ -384,6 +397,7 @@ chara stmt args
       if filename == "NULL"
         then writeBody $ "csp " <> TB.text charaID
         else do
+          addAsset stmt AD.Chara filename
           path <- getAssetPath "chara" filename
           writeBody $ "lsp " <> TB.text charaID <> "," <> path <> "," <> TB.text position <> ",0"
     -- 忽略time参数，因为lsp没有淡入时间参数
@@ -420,7 +434,9 @@ charaY stmt args
           layer = charaArgs !! (idx + 4)
       if filename == "NULL"
         then writeBody $ "csp " <> TB.text charaID
-        else writeBody $ "lsp " <> TB.text charaID <> "," <> TB.text filename <> "," <> TB.text x <> "," <> TB.text y
+        else do
+          addAsset stmt AD.Chara filename
+          writeBody $ "lsp " <> TB.text charaID <> "," <> TB.text filename <> "," <> TB.text x <> "," <> TB.text y
     -- 忽略coordMode和time参数
     pure ()
   | otherwise = invalidArg stmt
