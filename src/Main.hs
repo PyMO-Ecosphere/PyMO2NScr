@@ -14,6 +14,8 @@ import System.Environment (getArgs)
 import System.FilePath ((</>))
 import Compiler (makeCompilerInput, runCompilerExitIfFailed)
 import ScriptCompiler
+import Control.Monad.Trans.Resource (ResourceT, runResourceT)
+import Control.Monad.IO.Class (MonadIO(..))
 
 type Encoding = (String, T.Text -> ByteString)
 
@@ -64,19 +66,19 @@ printHelp = do
   putStrLn "        sjis                     适用于原版 ONScripter 和 NScripter"
   putStrLn ""
 
-process :: Arguments -> IO ()
+process :: Arguments -> ResourceT IO ()
 process args = do
   ci <- makeCompilerInput $ pymoDir args
-  result <- runCompilerExitIfFailed ci $ compileAllScripts "start"
+  result <- liftIO $ runCompilerExitIfFailed ci $ compileAllScripts "start"
   let outputFile = pymoDir args </> "00.txt"
       (_, encodeFunc) = encoding args
       encoded = encodeFunc result
-  B.writeFile outputFile encoded
-  putStrLn $ "编译完成，输出到 " ++ outputFile ++ " 。"
+  liftIO $ B.writeFile outputFile encoded
+  liftIO $ putStrLn $ "编译完成，输出到 " ++ outputFile ++ " 。"
 
 main :: IO ()
 main = withUtf8 $ do
   args <- getArgs
   case parseArgs args of
     Nothing -> printHelp
-    Just args' -> process args'
+    Just args' -> runResourceT $ process args'

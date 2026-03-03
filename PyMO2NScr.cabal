@@ -35,6 +35,7 @@ executable PyMO2NScr
                      , file-embed
                      , hashable
                      , unordered-containers
+                     , resourcet
                      , PyMO-Parser
 
   ghc-options:         -Wall

@@ -17,21 +17,26 @@ import qualified Data.Text as T
 import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified Data.Text.Encoding as T
+import qualified Language.PyMO.AssetDatabase as AD
 import GHC.Generics (Generic)
 import Data.FileEmbed (embedFile)
 import System.FilePath ((</>))
 import Data.Hashable (Hashable)
 import System.Exit (exitFailure)
+import Control.Monad.Trans.Resource (ResourceT)
+import Control.Monad.IO.Class (liftIO)
 
 -- Compiler Input
 data CompilerInput = CompilerInput
   { ciPyMOGameConfig :: PyMO.GameConfig
-  , ciPyMOGameDir :: FilePath }
+  , ciPyMOGameDir :: FilePath
+  , ciAssetDatabase :: AD.AssetDatabase }
 
-makeCompilerInput :: FilePath -> IO CompilerInput
+makeCompilerInput :: FilePath -> ResourceT IO CompilerInput
 makeCompilerInput gameDir = do
-  gameConfig <- PyMO.loadGameConfig $ gameDir </> "gameconfig.txt"
-  return $ CompilerInput gameConfig gameDir
+  gameConfig <- liftIO $ PyMO.loadGameConfig $ gameDir </> "gameconfig.txt"
+  ad <- AD.openAssetDatabase gameDir gameConfig
+  return $ CompilerInput gameConfig gameDir ad
 
 getCompilerInput :: (CompilerInput -> a) -> Compiler a
 getCompilerInput = Compiler . RWS.asks
@@ -97,7 +102,7 @@ loadPyMOScript scriptName = do
     Just x -> return x
     Nothing -> do
       gameDir <- getCompilerInput ciPyMOGameDir
-      script <- RWS.liftIO $ PyMO.loadPyMOScript gameDir (T.unpack scriptName)
+      script <- liftIO $ PyMO.loadPyMOScript gameDir (T.unpack scriptName)
       let scriptId = HM.size loadedScripts
           loadedScripts' = HM.insert scriptNameLowered (scriptId, script) loadedScripts
       updateCompilerState $ \x -> x { csLoadedScripts =  loadedScripts' }
@@ -113,40 +118,23 @@ markAsCompiled scriptName =
     csCompiledScripts = HS.insert (T.toLower scriptName) (csCompiledScripts x) }
 
 -- Asset
-data AssetKind
-  = Bg
-  | Bgm
-  | Chara
-  | Se
-  | System
-  | Video
-  | Voice
-  deriving ( Show, Eq, Generic )
 
-type AssetName = T.Text
-type AssetNameLowered = T.Text
-newtype AssetKey = AssetKey (AssetKind, AssetNameLowered)
+newtype AssetKey = AssetKey (AD.AssetKind, AD.AssetNameLowered)
   deriving ( Eq, Show, Generic )
 
-instance Hashable AssetKind
 instance Hashable AssetKey
 
-data Asset = Asset
-  { assetName :: AssetName
-  , assetNameLowered :: AssetNameLowered
-  , assetKind :: AssetKind }
-  deriving ( Show, Eq )
+addAsset :: PyMO.Stmt -> AD.AssetKind -> AD.AssetName -> Compiler ()
+addAsset stmt assetKind' assetName' = do
+  ad <- getCompilerInput ciAssetDatabase
+  asset <- liftIO $ AD.getAssetRef ad assetKind' assetName'
 
-addAsset :: AssetKind -> AssetName -> Compiler ()
-addAsset assetKind' assetName' =
-  writeCompilerOutput mempty { coAssets = HM.singleton k asset }
-  where
-    k = AssetKey (assetKind', assetNameLowered')
-    assetNameLowered' = T.toLower assetName'
-    asset = Asset
-      { assetName = assetName'
-      , assetKind = assetKind'
-      , assetNameLowered = assetNameLowered' }
+  case asset of
+    Nothing ->
+      throwWithStmt stmt $ "未能找到资源 " ++ show assetKind' ++ ": " ++ show assetName' ++ " 。"
+    Just asset' ->
+      let k = AssetKey (assetKind', AD.arNameLowered asset') in
+      writeCompilerOutput mempty { coAssets = HM.singleton k asset' }
 
 -- Compiler Output
 
@@ -157,7 +145,7 @@ data CompilerOutput = CompilerOutput
   , coDefines :: Hole
   , coBoot :: Hole
   , coBody :: Hole
-  , coAssets :: HM.HashMap AssetKey Asset }
+  , coAssets :: HM.HashMap AssetKey AD.AssetReference }
 
 instance Semigroup CompilerOutput where
   a <> b = CompilerOutput
@@ -208,14 +196,14 @@ instance Monad Compiler where
   Compiler m >>= f = Compiler (m >>= (\x -> let Compiler r = f x in r))
 
 instance RWS.MonadIO Compiler where
-  liftIO = Compiler . RWS.liftIO
+  liftIO = Compiler . liftIO
 
 instance E.MonadError CompilerError Compiler where
   throwError e = Compiler (RWS.lift (E.throwError e))
   catchError (Compiler m) handler = Compiler $ E.catchError m (\e -> let Compiler r = handler e in r)
 
 logInfo :: String -> Compiler ()
-logInfo = RWS.liftIO . putStrLn
+logInfo = liftIO . putStrLn
 
 stmtMsg :: PyMO.Stmt -> String
 stmtMsg stmt =
