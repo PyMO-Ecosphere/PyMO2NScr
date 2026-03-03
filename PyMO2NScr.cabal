@@ -22,6 +22,7 @@ executable PyMO2NScr
                      , CommandCompiler
                      , ScriptCompiler
                      , DefinesGenerator
+                     , NSACreator
 
   build-depends:       base >= 4.7 && < 5
                      , with-utf8
