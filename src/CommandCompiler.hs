@@ -340,7 +340,7 @@ bg stmt args = case args of
   [filename] -> do
     addAsset stmt AD.Bg filename
     path <- getAssetPath "bg" filename
-    writeBody $ "bg " <> path
+    writeBody $ "bg " <> path <> ",1"
   [filename, transition, time] -> do
     addAsset stmt AD.Bg filename
     path <- getAssetPath "bg" filename

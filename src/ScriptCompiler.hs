@@ -35,6 +35,17 @@ splitLabels currentLabelId script = do
       (nextBlock, nextLabeledBlocks) <- splitLabels nextLabelId restStmt
       return (currentBlock, (nextLabelId, nextLabelName, nextBlock) : nextLabeledBlocks)
 
+compileTrivialCommand :: PyMO.Stmt -> Compiler ()
+compileTrivialCommand stmt =
+  case HM.lookup (PyMO.stmtCommand stmt) CC.trivialCommands of
+    Nothing -> do
+      warnWithStmt stmt $ "无法处理命令 " ++ (T.unpack $ PyMO.stmtCommand stmt) ++ " ，忽略该命令。"
+    Just x -> do
+      catchError (x stmt (PyMO.stmtArgs stmt)) $ \(stmt', msg) ->
+        case stmt' of
+          Nothing -> warn msg
+          Just stmt'' -> warnWithStmt stmt'' msg
+
 compileCommand ::
   ScriptId ->
   CC.AllLabeledBlocks ->
@@ -51,17 +62,7 @@ compileCommand scriptId allLabeledBlocks nextLabeledBlocks stmt =
       pure Nothing
     "change" -> Just <$> CC.change stmt (PyMO.stmtArgs stmt)
     "call" -> Just <$> CC.call stmt (PyMO.stmtArgs stmt)
-    trivialCommand ->
-      case HM.lookup trivialCommand CC.trivialCommands of
-        Nothing -> do
-          warnWithStmt stmt $ "无法处理命令 " ++ (T.unpack $ PyMO.stmtCommand stmt) ++ " ，忽略该命令。"
-          return Nothing
-        Just x -> do
-          catchError (x stmt (PyMO.stmtArgs stmt)) $ \(stmt', msg) ->
-            case stmt' of
-              Nothing -> warn msg
-              Just stmt'' -> warnWithStmt stmt'' msg
-          return Nothing
+    _ -> compileTrivialCommand stmt >> pure Nothing
 
 compileBlock ::
   ScriptId ->
@@ -106,6 +107,20 @@ compileAllScripts' startScriptName = do
   refs <- compileScript startScriptName
   forM_ refs compileAllScripts'
 
+pymoBootLogo :: PyMO.Script
+pymoBootLogo = PyMO.parsePyMOScript "<pymo-bootloader>" $ T.unlines
+  [
+      "#textbox message,name",
+      "#wait 50",
+      "#bg logo1",
+      "#wait 300",
+      "#bg logo2",
+      "#wait 300"
+  ]
+
+
 compileAllScripts :: ScriptName -> Compiler ()
-compileAllScripts startScriptName =
-  compileAllScripts' startScriptName >> generateDefines
+compileAllScripts startScriptName = do
+  forM_ pymoBootLogo compileTrivialCommand
+  compileAllScripts' startScriptName
+  generateDefines
