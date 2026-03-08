@@ -210,8 +210,8 @@ textbox stmt [message, name] = do
   addAsset stmt AD.System message True
   addAsset stmt AD.System name True
 
-  let messageBoxPath = "system" </> T.unpack message <.> "png"
-      nameBoxPath = "system" </> T.unpack name <.> "png"
+  let messageBoxPath = "system/" ++ T.unpack message <.> "png"
+      nameBoxPath = "system/" ++ T.unpack name <.> "png"
 
   messageBoxImageSize <- getImageSize messageBoxPath
   nameboxImageSize <- getImageSize nameBoxPath

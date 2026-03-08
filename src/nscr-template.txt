@@ -8,6 +8,9 @@ globalon
 numalias SP_TEXTBOX_NAMEBOX_IMG,1
 numalias SP_TEXTBOX_NAMEBOX_TEXT,0
 
+windowchip SP_TEXTBOX_NAMEBOX_IMG
+windowchip SP_TEXTBOX_NAMEBOX_TEXT
+
 numalias VARLT_TEXTBOX_NAMEBOX_CURNAME,24
 
 defsub textbox_set_name

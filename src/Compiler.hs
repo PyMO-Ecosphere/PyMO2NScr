@@ -133,7 +133,7 @@ addAsset stmt assetKind' assetName' imageAssetHasMask = do
 
   case asset of
     Nothing ->
-      throwWithStmt stmt $ "未能找到资源 " ++ show assetKind' ++ ": " ++ show assetName' ++ " 。"
+      warnWithStmt stmt $ "未能找到资源 " ++ show assetKind' ++ ": " ++ show assetName' ++ " 。"
     Just asset' ->
       let k = AssetKey (assetKind', AD.arNameLowered asset') in
       writeCompilerOutput mempty { coAssets = HM.singleton k (asset', imageAssetHasMask) }
