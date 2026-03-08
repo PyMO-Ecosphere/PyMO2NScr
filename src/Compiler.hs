@@ -126,8 +126,8 @@ instance Hashable AssetKey
 
 type AssetName = T.Text
 
-addAsset :: PyMO.Stmt -> AD.AssetKind -> AssetName -> Compiler ()
-addAsset stmt assetKind' assetName' = do
+addAsset :: PyMO.Stmt -> AD.AssetKind -> AssetName -> ImageAssetHasMask -> Compiler ()
+addAsset stmt assetKind' assetName' imageAssetHasMask = do
   ad <- getCompilerInput ciAssetDatabase
   asset <- liftIO $ AD.getAssetRef ad assetKind' $ T.unpack assetName'
 
@@ -136,18 +136,20 @@ addAsset stmt assetKind' assetName' = do
       throwWithStmt stmt $ "未能找到资源 " ++ show assetKind' ++ ": " ++ show assetName' ++ " 。"
     Just asset' ->
       let k = AssetKey (assetKind', AD.arNameLowered asset') in
-      writeCompilerOutput mempty { coAssets = HM.singleton k asset' }
+      writeCompilerOutput mempty { coAssets = HM.singleton k (asset', imageAssetHasMask) }
 
 -- Compiler Output
 
 type Hole = TB.TextBuilder
+
+type ImageAssetHasMask = Bool
 
 data CompilerOutput = CompilerOutput
   { coHeader :: Hole
   , coDefines :: Hole
   , coBoot :: Hole
   , coBody :: Hole
-  , coAssets :: HM.HashMap AssetKey AD.AssetReference }
+  , coAssets :: HM.HashMap AssetKey (AD.AssetReference, ImageAssetHasMask) }
 
 instance Semigroup CompilerOutput where
   a <> b = CompilerOutput
