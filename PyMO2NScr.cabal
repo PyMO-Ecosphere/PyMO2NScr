@@ -37,6 +37,7 @@ executable PyMO2NScr
                      , unordered-containers
                      , resourcet
                      , PyMO-Parser
+                     , JuicyPixels
 
   ghc-options:         -Wall
                        -Wcompat
