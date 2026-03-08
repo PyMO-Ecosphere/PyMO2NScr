@@ -12,7 +12,11 @@ import Control.Monad (forM_)
 import Data.List (sort)
 
 runtimeVariables :: Int
-runtimeVariables = 10
+runtimeVariables = 32
+
+-- runtime vars
+-- 0~16 子程序用的临时变量
+-- 24~31 游戏状态变量
 
 -- | runtime vars | local vars | gap | global vars | padding |
 --                |            |     |             |

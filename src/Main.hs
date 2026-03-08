@@ -69,7 +69,7 @@ printHelp = do
 process :: Arguments -> ResourceT IO ()
 process args = do
   ci <- makeCompilerInput $ pymoDir args
-  result <- liftIO $ runCompilerExitIfFailed ci $ compileAllScripts "start"
+  result <- liftIO $ runCompilerExitIfFailed ci $ compileAllScripts
   let outputFile = pymoDir args </> "00.txt"
       (_, encodeFunc) = encoding args
       encoded = encodeFunc result

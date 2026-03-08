@@ -4,14 +4,16 @@ module ScriptCompiler (compileAllScripts) where
 
 import Compiler
 import qualified Language.PyMO.Script as PyMO
+import qualified Language.PyMO.GameConfig as PyMO
 import qualified Data.Text as T
+import qualified TextBuilder as TB
 import qualified Data.HashMap.Strict as HM
 import qualified CommandCompiler as CC
 import Control.Monad (forM, forM_)
 import Data.Maybe (catMaybes)
 import DefinesGenerator
-import Control.Monad.Error.Class (MonadError(catchError))
-import CommandCompiler (invalidArg)
+import Control.Monad.Error.Class (MonadError(catchError, throwError))
+import CommandCompiler (invalidArg, ReferencedScriptName)
 
 collectBlockUntilNextLabel ::
   [PyMO.Stmt] -> Compiler ([PyMO.Stmt], Maybe (CC.LabelName, [PyMO.Stmt]))
@@ -118,9 +120,48 @@ pymoBootLogo = PyMO.parsePyMOScript "<pymo-bootloader>" $ T.unlines
       "#wait 300"
   ]
 
+checkGameConfig :: Compiler ReferencedScriptName
+checkGameConfig = do
+  gameConfig <- getCompilerInput ciPyMOGameConfig
 
-compileAllScripts :: ScriptName -> Compiler ()
-compileAllScripts startScriptName = do
+  let gameTitle = T.filter (/= '\"') $ PyMO.getTextValue "gametitle" gameConfig
+  writeDefine $ "caption " <> "\"" <> TB.text gameTitle <> "\""
+  writeDefine $ "versionstr " <> "\"" <> TB.text gameTitle <> "\", \"PyMO2NScr\""
+
+  let platform = T.unpack $ PyMO.getTextValue "platform" gameConfig
+  if platform /= "s60v5" && platform /= "pygame" && platform /= "s60v3" then
+    warn $ "gameconfig.txt 中存在未知的 platform 值：" ++ platform
+  else pure ()
+
+  let engineVersion = read $ T.unpack $ PyMO.getTextValue "engineversion" gameConfig
+  if engineVersion > (1.2 :: Double) then
+    warn $ "gameconfig.txt 的 engine version 字段大于 1.2，可能会存在无法被正常识别的 pymo 命令。"
+  else pure ()
+
+  case PyMO.getTextValue "scripttype" gameConfig of
+    "pymo" -> pure ()
+    x | x `elem` [ "mo1", "MO1", "mo2", "MO2" ] ->
+      throwError (Nothing, "MO1 和 MO2 脚本类型必须先安装 MO2PyMO 补丁才能编译。")
+    s -> throwError (Nothing, "无法识别的 scripttype 值：" ++ T.unpack s)
+
+  let nameboxOrig = PyMO.getInt2Value "nameboxorig" gameConfig
+  writeDefine $ "numalias CONST_PYMO_GAMECONFIG_NAMEBOXORIG_X," <> TB.decimal (fst nameboxOrig)
+  writeDefine $ "numalias CONST_PYMO_GAMECONFIG_NAMEBOXORIG_Y," <> TB.decimal (snd nameboxOrig)
+
+  nameAlign <- case PyMO.getTextValue "namealign" gameConfig of
+    "left" -> pure (0 :: Int)
+    "right" -> pure 1
+    "middle" -> pure 2
+    s -> warn ("无法识别的 textalign 值：" ++ T.unpack s) >> pure 2
+
+  writeDefine $ "numalias CONST_PYMO_GAMECONFIG_NAMEALIGN," <> TB.decimal nameAlign
+
+  return $ PyMO.getTextValue "startscript" gameConfig
+
+
+compileAllScripts :: Compiler ()
+compileAllScripts = do
+  startScript <- checkGameConfig
   forM_ pymoBootLogo compileTrivialCommand
-  compileAllScripts' startScriptName
+  compileAllScripts' startScript
   generateDefines

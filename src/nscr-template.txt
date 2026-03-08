@@ -1,8 +1,31 @@
 &&header
+
 *define
+
+nsa
 globalon
+
+numalias SP_TEXTBOX_NAMEBOX_IMG,1
+numalias SP_TEXTBOX_NAMEBOX_TEXT,0
+
+numalias VARLT_TEXTBOX_NAMEBOX_CURNAME
+
+defsub textbox_set_name
+defsub textbox_clear_name
+
 &&defines
+
 game
+
 *start
+
 &&boot
 &&body
+
+*textbox_set_name
+getparam $VARLT_TEXTBOX_NAMEBOX_CURNAME
+mov %VARLT_TEXTBOX_NAMEBOX_CURNAME,1
+
+*textbox_clear_name
+mov $VARLT_TEXTBOX_NAMEBOX_CURNAME,""
+mov %VARLT_TEXTBOX_NAMEBOX_CURNAME,0

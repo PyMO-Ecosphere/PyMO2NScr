@@ -24,12 +24,16 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Language.PyMO.Script as PyMO
 import qualified TextBuilder as TB
+import qualified Codec.Picture as Img
 import Control.Monad (when, forM_)
 import Data.Char (isDigit, ord, chr)
 import Data.List (find)
 import Compiler
+import Control.Monad.IO.Class (liftIO)
 import qualified Language.PyMO.AssetDatabase as AD
 import qualified Language.PyMO.GameConfig as PyMO
+import System.FilePath ((</>), (<.>))
+import Data.Maybe (isJust, fromMaybe)
 
 -- utils
 type LabelName = T.Text
@@ -85,6 +89,36 @@ invalidArg stmt =
     "无法为命令" ++
     T.unpack (PyMO.stmtCommand stmt) ++
     "匹配" ++ show (length $ PyMO.stmtArgs stmt)  ++ "个参数。"
+
+getImageSize :: FilePath -> Compiler (Maybe (Int, Int))
+getImageSize path = do
+  gameDir <- getCompilerInput ciPyMOGameDir
+  img <- liftIO $ Img.readImage (gameDir <> "/" <> path)
+  case img of
+    Left _ -> pure Nothing
+    Right img' -> pure $ Just (
+      Img.dynamicMap Img.imageWidth img',
+      Img.dynamicMap Img.imageHeight img')
+
+data NSArg
+  = NSArgInt Int
+  | NSArgT T.Text
+  | NSArgTB TB.TextBuilder
+  | NSArgTQ T.Text
+  | NSArgTBQ TB.TextBuilder
+
+writeCmd :: TB.TextBuilder -> [NSArg] -> Compiler ()
+writeCmd cmd [] = writeBody cmd
+writeCmd cmd args = do
+  writeBody $ cmd <> " " <> TB.intercalateMap "," mapNsArg args
+  where
+    mapNsArg (NSArgInt i) = TB.decimal i
+    mapNsArg (NSArgT t) = TB.text t
+    mapNsArg (NSArgTB tb) = tb
+    mapNsArg (NSArgTQ t) = quoted $ TB.text t
+    mapNsArg (NSArgTBQ tb) = quoted tb
+
+
 
 -- non-trivial commands
 
@@ -168,6 +202,58 @@ call :: CommandHandler ReferencedScriptName
 call = changeTemplate "gosub"
 
 -- trivial commands
+
+--- 人工验证的命令
+
+textbox :: CommandHandler ()
+textbox stmt [message, name] = do
+  addAsset stmt AD.System message
+  addAsset stmt AD.System name
+
+  let messageBoxPath = "system" </> T.unpack message <.> "png"
+      nameBoxPath = "system" </> T.unpack name <.> "png"
+
+  messageBoxImageSize <- getImageSize messageBoxPath
+  nameboxImageSize <- getImageSize nameBoxPath
+  gameConf <- getCompilerInput ciPyMOGameConfig
+  let (sw, sh) = PyMO.getInt2Value "imagesize" gameConf
+      fontSize = PyMO.getIntValue "fontsize" gameConf
+      messageBoxImageSize' = fromMaybe (sw, sh `div` 4) messageBoxImageSize
+      msgtb = PyMO.getInt2Value "msgtb" gameConf
+      msglr = PyMO.getInt2Value "msglr" gameConf
+      winLeft = (sw - fst messageBoxImageSize') `div` 2
+      winTop = sh - snd messageBoxImageSize'
+      baseArgs =
+        [ NSArgInt $ winLeft + fst msglr
+        , NSArgInt $ winTop + fst msgtb
+        , NSArgInt $ (fst messageBoxImageSize' - 2 * fst msglr) `div` fontSize
+        , NSArgInt $ (snd messageBoxImageSize' - 2 * fst msgtb) `div` fontSize
+        , NSArgInt fontSize
+        , NSArgInt fontSize
+        , NSArgInt 0
+        , NSArgInt 0
+        , NSArgInt $ PyMO.getIntValue "textspeed" gameConf
+        , NSArgInt 1
+        , NSArgInt 1
+        ]
+      colorWindowArgs =
+        [ NSArgTB "#7f7f7f"
+        , NSArgInt winLeft
+        , NSArgInt winTop
+        , NSArgInt $ fst messageBoxImageSize'
+        , NSArgInt $ snd messageBoxImageSize' ]
+      imgWinArgs =
+        [ NSArgTBQ $ ":a;" <> TB.string messageBoxPath
+        , NSArgInt winLeft
+        , NSArgInt winTop
+        ]
+
+  writeCmd "setwindow3" $
+    baseArgs ++ if isJust messageBoxImageSize then imgWinArgs else colorWindowArgs
+
+textbox stmt _ = invalidArg stmt
+
+--- AI生成的命令
 
 textOff :: CommandHandler ()
 textOff stmt [] = writeBody "cl"
@@ -330,10 +416,6 @@ rand stmt [varName, minVal, maxVal] = do
     else ("%" <>) <$> pymoVarToNSVar maxVal
   writeBody $ "rnd %" <> nsVar <> "," <> nsMin <> "," <> nsMax
 rand stmt _ = invalidArg stmt
-
-textbox :: CommandHandler ()
-textbox stmt [message, name] = writeBody $ "; textbox command not implemented: " <> TB.text message <> "," <> TB.text name
-textbox stmt _ = invalidArg stmt
 
 bg :: CommandHandler ()
 bg stmt args = case args of
