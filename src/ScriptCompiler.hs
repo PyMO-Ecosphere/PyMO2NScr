@@ -144,6 +144,10 @@ checkGameConfig = do
       throwError (Nothing, "MO1 和 MO2 脚本类型必须先安装 MO2PyMO 补丁才能编译。")
     s -> throwError (Nothing, "无法识别的 scripttype 值：" ++ T.unpack s)
 
+  let imageSize = PyMO.getInt2Value "imagesize" gameConfig
+  writeDefine $ "numalias CONST_PYMO_GAMECONFIG_IMAGESIZE_X," <> TB.decimal (fst imageSize)
+  writeDefine $ "numalias CONST_PYMO_GAMECONFIG_IMAGESIZE_Y," <> TB.decimal (snd imageSize)
+
   let nameboxOrig = PyMO.getInt2Value "nameboxorig" gameConfig
   writeDefine $ "numalias CONST_PYMO_GAMECONFIG_NAMEBOXORIG_X," <> TB.decimal (fst nameboxOrig)
   writeDefine $ "numalias CONST_PYMO_GAMECONFIG_NAMEBOXORIG_Y," <> TB.decimal (snd nameboxOrig)
