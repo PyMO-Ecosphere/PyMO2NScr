@@ -38,6 +38,7 @@ executable PyMO2NScr
                      , resourcet
                      , PyMO-Parser
                      , JuicyPixels
+                     , directory
 
   ghc-options:         -Wall
                        -Wcompat

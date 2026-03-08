@@ -18,7 +18,10 @@ module CommandCompiler
   , change
   , call
   , toFullWidthChar
-  , toFullWidthText) where
+  , toFullWidthText
+  , NSArg(..)
+  , writeCmd
+  ) where
 
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
@@ -203,7 +206,23 @@ call = changeTemplate "gosub"
 
 -- trivial commands
 
---- 人工验证的命令
+writeText :: T.Text -> Compiler ()
+writeText = writeBody . TB.string . filterText . T.unpack
+  where
+    filterText :: String -> String
+    filterText [] = " \\"
+    filterText ('\\':'n':cs) = '\n' : filterText cs
+    filterText ('\\':'r':cs) = ' ' : '@' : '\n' : filterText cs
+    filterText (c:cs) = toFullWidthChar c : filterText cs
+
+say :: CommandHandler ()
+say _ [t] = do
+  writeCmd "textbox_clear_name" []
+  writeText t
+say _ [name, t] = do
+  writeCmd "textbox_set_name" [ NSArgTQ name ]
+  writeText t
+say stmt _ = invalidArg stmt
 
 textbox :: CommandHandler ()
 textbox stmt [message, name] = do
@@ -219,6 +238,8 @@ textbox stmt [message, name] = do
   let (sw, sh) = PyMO.getInt2Value "imagesize" gameConf
       fontSize = PyMO.getIntValue "fontsize" gameConf
       messageBoxImageSize' = fromMaybe (sw, sh `div` 4) messageBoxImageSize
+      nameboxImageSize' = fromMaybe (fst messageBoxImageSize' `div` 4, fontSize * 2) nameboxImageSize
+      nameOrig = PyMO.getInt2Value "nameboxorig" gameConf
       msgtb = PyMO.getInt2Value "msgtb" gameConf
       msglr = PyMO.getInt2Value "msglr" gameConf
       winLeft = (sw - fst messageBoxImageSize') `div` 2
@@ -251,9 +272,26 @@ textbox stmt [message, name] = do
   writeCmd "setwindow3" $
     baseArgs ++ if isJust messageBoxImageSize then imgWinArgs else colorWindowArgs
 
+  writeCmd "lsph"
+    [ NSArgTB "SP_TEXTBOX_NAMEBOX_IMG"
+    , NSArgTBQ $ ":a;" <> TB.string nameBoxPath
+    , NSArgInt $ winLeft + fst nameOrig
+    , NSArgInt $ winTop - snd nameboxImageSize' - snd nameOrig
+    ]
+
+  writeCmd "mov"
+    [ NSArgTB "%VARLT_TEXTBOX_NAMEBOX_X"
+    , NSArgInt $ winLeft + fst nameOrig
+    ]
+
+  writeCmd "mov"
+    [ NSArgTB "%VARLT_TEXTBOX_NAMEBOX_Y"
+    , NSArgInt $ winTop - snd nameboxImageSize' - snd nameOrig
+    ]
+
 textbox stmt _ = invalidArg stmt
 
---- AI生成的命令
+--- 尚未验证的指令
 
 textOff :: CommandHandler ()
 textOff stmt [] = writeBody "cl"
@@ -458,12 +496,6 @@ selectText stmt args
       _ -> invalidArg stmt
   | otherwise = invalidArg stmt
 
-say :: CommandHandler ()
-say stmt args = case args of
-  [name, content] -> writeBody $ TB.text (toFullWidthText (name <> "，" <> content)) <> "@"
-  [content] -> writeBody $ TB.text (toFullWidthText content) <> "@"
-  _ -> invalidArg stmt
-
 chara :: CommandHandler ()
 chara stmt args
   | length args >= 5 && (length args - 1) `mod` 4 == 0 = do
@@ -472,16 +504,16 @@ chara stmt args
         numChara = (length charaArgs) `div` 4
     forM_ [0..numChara-1] $ \i -> do
       let idx = i * 4
-          charaID = charaArgs !! idx
+          charaID = (read (T.unpack $ charaArgs !! idx)) :: Int
           filename = charaArgs !! (idx + 1)
           position = charaArgs !! (idx + 2)
           layer = charaArgs !! (idx + 3)
       if filename == "NULL"
-        then writeBody $ "csp " <> TB.text charaID
+        then writeBody $ "csp " <> TB.decimal charaID
         else do
           addAsset stmt AD.Chara filename True
           path <- getAssetPath "chara" filename
-          writeBody $ "lsp " <> TB.text charaID <> "," <> path <> "," <> TB.text position <> ",0"
+          writeBody $ "lsp " <> TB.decimal (charaID + 100) <> "," <> path <> "," <> TB.text position <> ",0"
     -- 忽略time参数，因为lsp没有淡入时间参数
     pure ()
   | otherwise = invalidArg stmt

@@ -1,5 +1,4 @@
 &&header
-
 *define
 
 nsa
@@ -8,11 +7,9 @@ globalon
 numalias SP_TEXTBOX_NAMEBOX_IMG,1
 numalias SP_TEXTBOX_NAMEBOX_TEXT,0
 
-windowchip SP_TEXTBOX_NAMEBOX_IMG
-windowchip SP_TEXTBOX_NAMEBOX_TEXT
-
 numalias VARLT_TEXTBOX_NAMEBOX_CURNAME,24
-
+numalias VARLT_TEXTBOX_NAMEBOX_X,25
+numalias VARLT_TEXTBOX_NAMEBOX_Y,26
 defsub textbox_set_name
 defsub textbox_clear_name
 
@@ -28,7 +25,43 @@ game
 *textbox_set_name
 getparam $VARLT_TEXTBOX_NAMEBOX_CURNAME
 mov %VARLT_TEXTBOX_NAMEBOX_CURNAME,1
+gosub *textbox_show
+return
 
 *textbox_clear_name
 mov $VARLT_TEXTBOX_NAMEBOX_CURNAME,""
 mov %VARLT_TEXTBOX_NAMEBOX_CURNAME,0
+gosub *textbox_show
+return
+
+*textbox_show
+lsp SP_TEXTBOX_NAMEBOX_TEXT,":s;#ffffff"+$VARLT_TEXTBOX_NAMEBOX_CURNAME,0,0
+getspsize SP_TEXTBOX_NAMEBOX_IMG,%0,%1
+getspsize SP_TEXTBOX_NAMEBOX_TEXT,%2,%3
+mov %4,%1
+div %4,2
+add %4,%VARLT_TEXTBOX_NAMEBOX_Y
+mov %5,%3
+div %5,2
+sub %4,%5
+if CONST_PYMO_GAMECONFIG_NAMEALIGN==0 mov %5,%VARLT_TEXTBOX_NAMEBOX_X:add %5,4
+if CONST_PYMO_GAMECONFIG_NAMEALIGN==1 mov %5,%VARLT_TEXTBOX_NAMEBOX_X:add %5,%0:sub %5,%2:sub %5,4
+if CONST_PYMO_GAMECONFIG_NAMEALIGN==2 gosub *textbox_calc_name_text_pos_middle
+amsp SP_TEXTBOX_NAMEBOX_TEXT,%5,%4
+vsp SP_TEXTBOX_NAMEBOX_IMG,%VARLT_TEXTBOX_NAMEBOX_CURNAME
+vsp SP_TEXTBOX_NAMEBOX_TEXT,%VARLT_TEXTBOX_NAMEBOX_CURNAME
+print 1
+return
+
+*textbox_calc_name_text_pos_middle
+mov %5,%0
+sub %5,%2
+div %5,2
+add %5,%VARLT_TEXTBOX_NAMEBOX_X
+return
+
+*textbox_hide
+vsp SP_TEXTBOX_NAMEBOX_IMG,0
+vsp SP_TEXTBOX_NAMEBOX_TEXT,0
+print 1
+return
