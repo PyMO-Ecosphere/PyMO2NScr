@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module CommandCompiler
   ( LabelName
@@ -35,8 +37,8 @@ import Compiler
 import Control.Monad.IO.Class (liftIO)
 import qualified Language.PyMO.AssetDatabase as AD
 import qualified Language.PyMO.GameConfig as PyMO
-import System.FilePath ((</>), (<.>))
 import Data.Maybe (isJust, fromMaybe)
+import Text.Read (readMaybe)
 
 -- utils
 type LabelName = T.Text
@@ -121,8 +123,6 @@ writeCmd cmd args = do
     mapNsArg (NSArgTQ t) = quoted $ TB.text t
     mapNsArg (NSArgTBQ tb) = quoted tb
 
-
-
 -- non-trivial commands
 
 findGotoNScrLabel ::
@@ -206,6 +206,8 @@ call = changeTemplate "gosub"
 
 -- trivial commands
 
+-- 一、对话文字显示指令
+
 writeText :: T.Text -> Compiler ()
 writeText = writeBody . TB.string . filterText . T.unpack
   where
@@ -217,26 +219,68 @@ writeText = writeBody . TB.string . filterText . T.unpack
 
 say :: CommandHandler ()
 say _ [t] = do
+  writeCmd "text_off" []
   writeCmd "textbox_clear_name" []
   writeText t
 say _ [name, t] = do
+  writeCmd "text_off" []
   writeCmd "textbox_set_name" [ NSArgTQ name ]
   writeText t
 say stmt _ = invalidArg stmt
+
+pattern PInt :: Int -> PyMOArg
+pattern PInt i <- (readMaybe . T.unpack -> Just i)
+
+text :: CommandHandler ()
+text _ [content, PInt x1, PInt y1, _, _, color, PInt size, PInt showImmediately] = do
+  (x, y) <- convPos (x1, y1)
+  (sw, _) <- getScreenSize
+  let sw' = fromIntegral sw :: Double
+      sz = sw' * fromIntegral size / 640.0
+      sz' = T.pack (show (round (sz * 2.0) :: Int))
+
+  writeCmd "text"
+    [ NSArgTQ $ ":s/" <> sz' <> "," <> sz' <> ",0;" <> color <> content
+    , NSArgInt x
+    , NSArgInt y
+    ]
+
+  if showImmediately == 0 then writeCmd "click" [] else pure ()
+text stmt _ = invalidArg stmt
+
+textOff :: CommandHandler ()
+textOff _ [] = writeCmd "text_off" []
+textOff stmt _ = invalidArg stmt
+
+waitkey :: CommandHandler ()
+waitkey _ [] = do
+  writeCmd "btntime" [ NSArgTB "5000" ]
+  writeCmd "btnwait" [ NSArgTB "%0" ]
+waitkey stmt _ = invalidArg stmt
+
+title :: CommandHandler ()
+title _ [content] = do
+  writeCmd "mov " [ NSArgTB "$VARLT_TITLE_CUR", NSArgTQ content ]
+title stmt _ = invalidArg stmt
+
+titleDsp :: CommandHandler ()
+titleDsp _ [] = writeCmd "title_dsp" []
+titleDsp stmt _ = invalidArg stmt
+
 
 textbox :: CommandHandler ()
 textbox stmt [message, name] = do
   addAsset stmt AD.System message True
   addAsset stmt AD.System name True
 
-  let messageBoxPath = "system/" ++ T.unpack message <.> "png"
-      nameBoxPath = "system/" ++ T.unpack name <.> "png"
+  let messageBoxPath = "system/" ++ T.unpack message ++ ".png"
+      nameBoxPath = "system/" ++ T.unpack name ++".png"
 
   messageBoxImageSize <- getImageSize messageBoxPath
   nameboxImageSize <- getImageSize nameBoxPath
   gameConf <- getCompilerInput ciPyMOGameConfig
-  let (sw, sh) = PyMO.getInt2Value "imagesize" gameConf
-      fontSize = PyMO.getIntValue "fontsize" gameConf
+  (sw, sh) <- getScreenSize
+  let fontSize = PyMO.getIntValue "fontsize" gameConf
       messageBoxImageSize' = fromMaybe (sw, sh `div` 4) messageBoxImageSize
       nameboxImageSize' = fromMaybe (fst messageBoxImageSize' `div` 4, fontSize * 2) nameboxImageSize
       nameOrig = PyMO.getInt2Value "nameboxorig" gameConf
@@ -292,14 +336,6 @@ textbox stmt [message, name] = do
 textbox stmt _ = invalidArg stmt
 
 --- 尚未验证的指令
-
-textOff :: CommandHandler ()
-textOff stmt [] = writeBody "cl"
-textOff stmt _ = invalidArg stmt
-
-waitkey :: CommandHandler ()
-waitkey stmt [] = writeBody "click"
-waitkey stmt _ = invalidArg stmt
 
 bgmStop :: CommandHandler ()
 bgmStop stmt [] = writeBody "stop"
@@ -399,22 +435,6 @@ date stmt [dateBg, x, y, color] = do
   path <- getAssetPath "bg" dateBg
   writeBody $ "print " <> path <> "," <> TB.text x <> "," <> TB.text y <> "," <> TB.text color <> ",\"日期显示功能待完善\""
 date stmt _ = invalidArg stmt
-
-text :: CommandHandler ()
-text stmt args
-  | length args == 8 = do
-    let [content, x1, y1, x2, y2, color, size, showImmediately] = args
-    -- 简单实现：使用print命令，忽略一些样式参数
-    writeBody $ "print " <> quotedFullWidthText content <> "," <> TB.text x1 <> "," <> TB.text y1
-  | otherwise = invalidArg stmt
-
-title :: CommandHandler ()
-title stmt [content] = writeBody $ "savetitle " <> quotedFullWidthText content
-title stmt _ = invalidArg stmt
-
-titleDsp :: CommandHandler ()
-titleDsp stmt [] = writeBody "print \"标题显示功能待完善\""
-titleDsp stmt _ = invalidArg stmt
 
 set :: CommandHandler ()
 set stmt [varName, val] = do

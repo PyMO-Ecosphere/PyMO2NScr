@@ -41,6 +41,22 @@ makeCompilerInput gameDir = do
 getCompilerInput :: (CompilerInput -> a) -> Compiler a
 getCompilerInput = Compiler . RWS.asks
 
+getScreenSize :: Compiler (Int, Int)
+getScreenSize = do
+  gameConfig <- getCompilerInput ciPyMOGameConfig
+  return $ PyMO.getInt2Value "imagesize" gameConfig
+
+convPos :: (Int, Int) -> Compiler (Int, Int)
+convPos (x, y) = do
+  (sw, sh) <- getScreenSize
+  let sw' = fromIntegral sw :: Double
+      sh' = fromIntegral sh :: Double
+      x' = fromIntegral x :: Double
+      y' = fromIntegral y :: Double
+      x'' = x' / 100.0 * sw'
+      y'' = y' / 100.0 * sh'
+  return (round x'', round y'')
+
 -- Compiler State
 type PyMOVarName = T.Text
 type NScrVarName = TB.TextBuilder

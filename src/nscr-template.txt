@@ -4,20 +4,44 @@
 nsa
 globalon
 
+; text
+numalias SP_TEXT_SP_BEGIN,4
+numalias SP_TEXT_SP_END,8
+
+numalias VARLT_TEXTBOX_NEXT,27
+
+defsub text
+defsub text_off
+
+; title_dsp
+
+numalias SP_TITLE_TEXT,2
+numalias VARLT_TITLE_CUR,28
+
+effect 2,10,500
+
+defsub title_dsp
+
+; textbox
 numalias SP_TEXTBOX_NAMEBOX_IMG,1
 numalias SP_TEXTBOX_NAMEBOX_TEXT,0
 
 numalias VARLT_TEXTBOX_NAMEBOX_CURNAME,24
 numalias VARLT_TEXTBOX_NAMEBOX_X,25
 numalias VARLT_TEXTBOX_NAMEBOX_Y,26
+
 defsub textbox_set_name
 defsub textbox_clear_name
+
+; compiled define
 
 &&defines
 
 game
 
 *start
+
+mov %VARLT_TEXTBOX_NEXT,SP_TEXT_SP_BEGIN
 
 &&boot
 &&body
@@ -64,4 +88,29 @@ return
 vsp SP_TEXTBOX_NAMEBOX_IMG,0
 vsp SP_TEXTBOX_NAMEBOX_TEXT,0
 print 1
+return
+
+*text
+getparam $0,%1,%2
+lsp %VARLT_TEXTBOX_NEXT,$0,%1,%2
+inc %VARLT_TEXTBOX_NEXT
+if %VARLT_TEXTBOX_NEXT==SP_TEXT_SP_END mov %VARLT_TEXTBOX_NEXT,SP_TEXT_SP_BEGIN
+print 1
+return
+
+*text_off
+mov %VARLT_TEXTBOX_NEXT,SP_TEXT_SP_BEGIN
+for %0=SP_TEXT_SP_BEGIN to SP_TEXT_SP_END
+csp %0
+next
+print 1
+return
+
+*title_dsp
+lsp SP_TITLE_TEXT,":s/32,32,0;#ffffff"+$VARLT_TITLE_CUR,100,50
+print 2
+btntime 5000
+btnwait %0
+csp SP_TITLE_TEXT
+print 2
 return

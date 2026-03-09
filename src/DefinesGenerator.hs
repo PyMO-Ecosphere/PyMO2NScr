@@ -6,7 +6,6 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.HashSet as HS
 import qualified TextBuilder as TB
 import qualified Data.Text as T
-import qualified Language.PyMO.GameConfig as PyMO
 import Compiler
 import Control.Monad (forM_)
 import Data.List (sort)
@@ -102,7 +101,7 @@ defineHeader :: NSVarLayout -> Compiler ()
 defineHeader layout = do
   let v = nslGlobalVarEnd layout
       g = nslGlobalVarBegin layout
-  s <- PyMO.getInt2Value "imagesize" <$> getCompilerInput ciPyMOGameConfig
+  s <- getScreenSize
   l <- getCompilerState csLabelCount
 
   if l < 10000 && v < 4096 then
