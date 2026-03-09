@@ -3,7 +3,10 @@
 
 nsa
 globalon
+usewheel
+useescspc
 rmenu "保存",save,"读取",load,"回想",lookback,"跳过",skip,"清除窗口",windowerase,"重启",reset
+textgosub *text_lb
 
 ; text
 numalias SP_TEXT_SP_BEGIN,4
@@ -91,12 +94,14 @@ return
 vsp SP_TEXTBOX_NAMEBOX_IMG,%VARLT_TEXTBOX_NAMEBOX_CURNAME
 vsp SP_TEXTBOX_NAMEBOX_TEXT,%VARLT_TEXTBOX_NAMEBOX_CURNAME
 print 1
+texton
 return
 
 *textbox_hide
 vsp SP_TEXTBOX_NAMEBOX_IMG,0
 vsp SP_TEXTBOX_NAMEBOX_TEXT,0
 print 1
+textoff
 return
 
 *text
@@ -118,8 +123,25 @@ return
 *title_dsp
 lsp SP_TITLE_TEXT,":s/32,32,0;#ffffff"+$VARLT_TITLE_CUR,100,50
 print 2
+btndef ""
 btntime 5000
 btnwait %0
 csp SP_TITLE_TEXT
 print 2
 return
+
+*text_lb
+btndef clear
+getcursor
+getenter
+getzxc
+btnwait %0
+if %0==-1 goto *text_lb_right_clicked
+texec
+return
+
+*text_lb_right_clicked
+textbox_hide
+systemcall rmenu
+textbox_show
+goto *text_lb

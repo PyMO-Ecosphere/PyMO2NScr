@@ -261,6 +261,10 @@ textOff stmt _ = invalidArg stmt
 
 waitkey :: CommandHandler ()
 waitkey _ [] = hideTextBoxScope $ do
+  writeCmd "btndef" [ NSArgTB "clear"]
+  writeCmd "getcursor" []
+  writeCmd "getenter" []
+  writeCmd "getzxc" []
   writeCmd "btntime" [ NSArgTB "5000" ]
   writeCmd "btnwait" [ NSArgTB "%0" ]
 waitkey stmt _ = invalidArg stmt
