@@ -46,6 +46,7 @@ defsub textbox_show
 game
 
 *start
+erasetextwindow 0
 
 mov %VARLT_TEXTBOX_NEXT,SP_TEXT_SP_BEGIN
 
