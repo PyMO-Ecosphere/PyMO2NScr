@@ -231,8 +231,15 @@ say stmt _ = invalidArg stmt
 pattern PInt :: Int -> PyMOArg
 pattern PInt i <- (readMaybe . T.unpack -> Just i)
 
+hideTextBoxScope :: Compiler a -> Compiler a
+hideTextBoxScope x = do
+  writeCmd "textbox_hide" []
+  x' <- x
+  writeCmd "textbox_show" []
+  return x'
+
 text :: CommandHandler ()
-text _ [content, PInt x1, PInt y1, _, _, color, PInt size, PInt showImmediately] = do
+text _ [content, PInt x1, PInt y1, _, _, color, PInt size, PInt showImmediately] = hideTextBoxScope $ do
   (x, y) <- convPos (x1, y1)
   (sw, _) <- getScreenSize
   let sw' = fromIntegral sw :: Double
@@ -253,7 +260,7 @@ textOff _ [] = writeCmd "text_off" []
 textOff stmt _ = invalidArg stmt
 
 waitkey :: CommandHandler ()
-waitkey _ [] = do
+waitkey _ [] = hideTextBoxScope $ do
   writeCmd "btntime" [ NSArgTB "5000" ]
   writeCmd "btnwait" [ NSArgTB "%0" ]
 waitkey stmt _ = invalidArg stmt
@@ -264,7 +271,7 @@ title _ [content] = do
 title stmt _ = invalidArg stmt
 
 titleDsp :: CommandHandler ()
-titleDsp _ [] = writeCmd "title_dsp" []
+titleDsp _ [] = hideTextBoxScope $ writeCmd "title_dsp" []
 titleDsp stmt _ = invalidArg stmt
 
 

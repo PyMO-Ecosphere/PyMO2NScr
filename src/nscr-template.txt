@@ -3,6 +3,7 @@
 
 nsa
 globalon
+rmenu "保存",save,"读取",load,"回想",lookback,"跳过",skip,"清除窗口",windowerase,"重启",reset
 
 ; text
 numalias SP_TEXT_SP_BEGIN,4
@@ -32,6 +33,8 @@ numalias VARLT_TEXTBOX_NAMEBOX_Y,26
 
 defsub textbox_set_name
 defsub textbox_clear_name
+defsub textbox_hide
+defsub textbox_show
 
 ; compiled define
 
@@ -49,16 +52,16 @@ mov %VARLT_TEXTBOX_NEXT,SP_TEXT_SP_BEGIN
 *textbox_set_name
 getparam $VARLT_TEXTBOX_NAMEBOX_CURNAME
 mov %VARLT_TEXTBOX_NAMEBOX_CURNAME,1
-gosub *textbox_show
+gosub *textbox_refresh
 return
 
 *textbox_clear_name
 mov $VARLT_TEXTBOX_NAMEBOX_CURNAME,""
 mov %VARLT_TEXTBOX_NAMEBOX_CURNAME,0
-gosub *textbox_show
+gosub *textbox_refresh
 return
 
-*textbox_show
+*textbox_refresh
 lsp SP_TEXTBOX_NAMEBOX_TEXT,":s;#ffffff"+$VARLT_TEXTBOX_NAMEBOX_CURNAME,0,0
 getspsize SP_TEXTBOX_NAMEBOX_IMG,%0,%1
 getspsize SP_TEXTBOX_NAMEBOX_TEXT,%2,%3
@@ -82,6 +85,12 @@ mov %5,%0
 sub %5,%2
 div %5,2
 add %5,%VARLT_TEXTBOX_NAMEBOX_X
+return
+
+*textbox_show
+vsp SP_TEXTBOX_NAMEBOX_IMG,%VARLT_TEXTBOX_NAMEBOX_CURNAME
+vsp SP_TEXTBOX_NAMEBOX_TEXT,%VARLT_TEXTBOX_NAMEBOX_CURNAME
+print 1
 return
 
 *textbox_hide
