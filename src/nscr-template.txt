@@ -7,10 +7,10 @@ usewheel
 useescspc
 rmenu "保存",save,"读取",load,"回想",lookback,"跳过",skip,"清除窗口",windowerase,"重启",reset
 textgosub *text_lb
-
+loadgosub *load_lb
 ; text
-numalias SP_TEXT_SP_BEGIN,4
-numalias SP_TEXT_SP_END,8
+numalias SP_TEXT_SP_BEGIN,6
+numalias SP_TEXT_SP_END,10
 
 numalias VARLT_TEXTBOX_NEXT,27
 
@@ -19,7 +19,7 @@ defsub text_off
 
 ; title_dsp
 
-numalias SP_TITLE_TEXT,3
+numalias SP_TITLE_TEXT,4
 numalias VARLT_TITLE_CUR,28
 
 effect 2,10,500
@@ -27,9 +27,10 @@ effect 2,10,500
 defsub title_dsp
 
 ; textbox
-numalias SP_TEXTBOX_NAMEBOX_IMG,1
 numalias SP_TEXTBOX_NAMEBOX_TEXT,0
+numalias SP_TEXTBOX_NAMEBOX_IMG,1
 numalias SP_TEXTBOX_MESSAGE_CURSOR,2
+numalias SP_TEXTBOX_MESSAGE_BOX,3
 
 numalias VARLT_TEXTBOX_NAMEBOX_CURNAME,24
 numalias VARLT_TEXTBOX_NAMEBOX_X,25
@@ -52,6 +53,9 @@ erasetextwindow 0
 mov %VARLT_TEXTBOX_NEXT,SP_TEXT_SP_BEGIN
 
 &&boot
+
+saveon
+
 &&body
 
 *textbox_set_name
@@ -82,6 +86,7 @@ if CONST_PYMO_GAMECONFIG_NAMEALIGN==2 gosub *textbox_calc_name_text_pos_middle
 amsp SP_TEXTBOX_NAMEBOX_TEXT,%5,%4
 vsp SP_TEXTBOX_NAMEBOX_IMG,%VARLT_TEXTBOX_NAMEBOX_CURNAME
 vsp SP_TEXTBOX_NAMEBOX_TEXT,%VARLT_TEXTBOX_NAMEBOX_CURNAME
+vsp SP_TEXTBOX_MESSAGE_BOX,1
 print 1
 return
 
@@ -95,6 +100,7 @@ return
 *textbox_show
 vsp SP_TEXTBOX_NAMEBOX_IMG,%VARLT_TEXTBOX_NAMEBOX_CURNAME
 vsp SP_TEXTBOX_NAMEBOX_TEXT,%VARLT_TEXTBOX_NAMEBOX_CURNAME
+vsp SP_TEXTBOX_MESSAGE_BOX,1
 print 1
 texton
 return
@@ -102,6 +108,7 @@ return
 *textbox_hide
 vsp SP_TEXTBOX_NAMEBOX_IMG,0
 vsp SP_TEXTBOX_NAMEBOX_TEXT,0
+vsp SP_TEXTBOX_MESSAGE_BOX,0
 print 1
 textoff
 return
@@ -133,6 +140,7 @@ print 2
 return
 
 *text_lb
+saveoff
 mov %1,0
 *text_lb_1
 if %1==0 mov %1,1:goto *text_lb_2
@@ -151,6 +159,7 @@ if %0==-5 goto *text_lb_1
 vsp SP_TEXTBOX_MESSAGE_CURSOR,0
 print 1
 texec
+saveon
 return
 
 *text_lb_right_clicked
@@ -159,3 +168,8 @@ textbox_hide
 systemcall rmenu
 textbox_show
 goto *text_lb
+
+*load_lb
+erasetextwindow 0
+saveon
+return

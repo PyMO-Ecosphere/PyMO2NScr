@@ -302,11 +302,11 @@ textbox stmt [message, name] = do
       msglr = PyMO.getInt2Value "msglr" gameConf
       winLeft = (sw - fst messageBoxImageSize') `div` 2
       winTop = sh - snd messageBoxImageSize'
-      baseArgs =
+      windowArgs =
         [ NSArgInt $ winLeft + fst msglr
         , NSArgInt $ winTop + fst msgtb
-        , NSArgInt $ (fst messageBoxImageSize' - 2 * fst msglr) `div` fontSize
-        , NSArgInt $ (snd messageBoxImageSize' - 2 * fst msgtb) `div` fontSize
+        , NSArgInt $ (fst messageBoxImageSize' - fst msglr - snd msglr) `div` fontSize
+        , NSArgInt $ (snd messageBoxImageSize' - fst msgtb - snd msgtb) `div` fontSize
         , NSArgInt fontSize
         , NSArgInt fontSize
         , NSArgInt 0
@@ -314,21 +314,22 @@ textbox stmt [message, name] = do
         , NSArgInt $ PyMO.getIntValue "textspeed" gameConf
         , NSArgInt 1
         , NSArgInt 1
-        ]
-      colorWindowArgs =
-        [ NSArgTB "#7f7f7f"
+        , NSArgTB $ if isJust messageBoxImageSize then "#ffffff" else "#7f7f7f"
         , NSArgInt winLeft
         , NSArgInt winTop
-        , NSArgInt $ fst messageBoxImageSize'
-        , NSArgInt $ snd messageBoxImageSize' ]
-      imgWinArgs =
-        [ NSArgTBQ $ ":a;" <> TB.string messageBoxPath
-        , NSArgInt winLeft
-        , NSArgInt winTop
-        ]
+        , NSArgInt $ 2 * fst messageBoxImageSize'
+        , NSArgInt $ 2 * snd messageBoxImageSize' ]
 
-  writeCmd "setwindow3" $
-    baseArgs ++ if isJust messageBoxImageSize then imgWinArgs else colorWindowArgs
+  writeCmd "setwindow" windowArgs
+
+  if isJust messageBoxImageSize then do
+    writeCmd "lsph"
+      [ NSArgTB "SP_TEXTBOX_MESSAGE_BOX"
+      , NSArgTBQ $ ":a;" <> TB.string messageBoxPath
+      , NSArgInt winLeft
+      , NSArgInt winTop
+      ]
+  else pure ()
 
   writeCmd "lsph"
     [ NSArgTB "SP_TEXTBOX_NAMEBOX_IMG"
