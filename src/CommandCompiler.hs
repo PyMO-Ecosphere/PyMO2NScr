@@ -278,8 +278,6 @@ titleDsp :: CommandHandler ()
 titleDsp _ [] = hideTextBoxScope $ writeCmd "title_dsp" []
 titleDsp stmt _ = invalidArg stmt
 
-
--- todo: 重构 文本框的背景需要是lsp加载出来的，而不能是默认lsp，否则 cursor 会被放到文本框后面去。
 textbox :: CommandHandler ()
 textbox stmt [message, name] = do
   addAsset stmt AD.System message True
