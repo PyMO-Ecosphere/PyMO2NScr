@@ -1,6 +1,6 @@
 &&header
 *define
-
+transmode alpha
 nsa
 globalon
 usewheel
@@ -19,7 +19,7 @@ defsub text_off
 
 ; title_dsp
 
-numalias SP_TITLE_TEXT,2
+numalias SP_TITLE_TEXT,3
 numalias VARLT_TITLE_CUR,28
 
 effect 2,10,500
@@ -29,6 +29,7 @@ defsub title_dsp
 ; textbox
 numalias SP_TEXTBOX_NAMEBOX_IMG,1
 numalias SP_TEXTBOX_NAMEBOX_TEXT,0
+numalias SP_TEXTBOX_MESSAGE_CURSOR,2
 
 numalias VARLT_TEXTBOX_NAMEBOX_CURNAME,24
 numalias VARLT_TEXTBOX_NAMEBOX_X,25
@@ -132,16 +133,28 @@ print 2
 return
 
 *text_lb
+mov %1,0
+*text_lb_1
+if %1==0 mov %1,1:goto *text_lb_2
+mov %1,0
+*text_lb_2
+vsp SP_TEXTBOX_MESSAGE_CURSOR,%1
+print 1
 btndef clear
+btntime 500
 getcursor
 getenter
 getzxc
-btnwait %0
+textbtnwait %0
 if %0==-1 goto *text_lb_right_clicked
+if %0==-5 goto *text_lb_1
+vsp SP_TEXTBOX_MESSAGE_CURSOR,0
+print 1
 texec
 return
 
 *text_lb_right_clicked
+vsp SP_TEXTBOX_MESSAGE_CURSOR,0
 textbox_hide
 systemcall rmenu
 textbox_show

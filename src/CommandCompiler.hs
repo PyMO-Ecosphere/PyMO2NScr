@@ -279,6 +279,7 @@ titleDsp _ [] = hideTextBoxScope $ writeCmd "title_dsp" []
 titleDsp stmt _ = invalidArg stmt
 
 
+-- todo: 重构 文本框的背景需要是lsp加载出来的，而不能是默认lsp，否则 cursor 会被放到文本框后面去。
 textbox :: CommandHandler ()
 textbox stmt [message, name] = do
   addAsset stmt AD.System message True
@@ -286,9 +287,11 @@ textbox stmt [message, name] = do
 
   let messageBoxPath = "system/" ++ T.unpack message ++ ".png"
       nameBoxPath = "system/" ++ T.unpack name ++".png"
+      messageCursor = "system/message_cursor.png"
 
   messageBoxImageSize <- getImageSize messageBoxPath
   nameboxImageSize <- getImageSize nameBoxPath
+  messageCursorSize <- getImageSize messageCursor
   gameConf <- getCompilerInput ciPyMOGameConfig
   (sw, sh) <- getScreenSize
   let fontSize = PyMO.getIntValue "fontsize" gameConf
@@ -344,8 +347,17 @@ textbox stmt [message, name] = do
     , NSArgInt $ winTop - snd nameboxImageSize' - snd nameOrig
     ]
 
-textbox stmt _ = invalidArg stmt
+  case messageCursorSize of
+    Nothing -> writeCmd "csp" [ NSArgTB "SP_TEXTBOX_MESSAGE_CURSOR" ]
+    Just (mcw, mch) -> do
+      addAsset stmt AD.System "message_cursor" True
+      writeCmd "lsph"
+        [ NSArgTB "SP_TEXTBOX_MESSAGE_CURSOR"
+        , NSArgTBQ $ ":a;" <> TB.string messageCursor
+        , NSArgInt $ winLeft + fst messageBoxImageSize' - mcw - snd msglr
+        , NSArgInt $ winTop + snd messageBoxImageSize' - mch - snd msgtb ]
 
+textbox stmt _ = invalidArg stmt
 --- 尚未验证的指令
 
 bgmStop :: CommandHandler ()
