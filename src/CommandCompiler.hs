@@ -315,8 +315,8 @@ textbox stmt [message, name] = do
         , NSArgTB $ if isJust messageBoxImageSize then "#ffffff" else "#7f7f7f"
         , NSArgInt winLeft
         , NSArgInt winTop
-        , NSArgInt $ 2 * fst messageBoxImageSize'
-        , NSArgInt $ 2 * snd messageBoxImageSize' ]
+        , NSArgInt $ winLeft + fst messageBoxImageSize'
+        , NSArgInt $ winTop + snd messageBoxImageSize' ]
 
   writeCmd "setwindow" windowArgs
 
@@ -733,3 +733,4 @@ trivialCommands = HM.fromList
   , ("select_img", selectImg)
   , ("select_imgs", selectImgs)
   , ("select_text", selectText) ]
+
